@@ -5,8 +5,8 @@ export interface User {
   phone: string;
   password: string;
   role: 'user' | 'merchant' | 'admin' | 'super_admin';
-  status: 'active' | 'suspended';  // 改为枚举值
-  avatar_url: string | null;       // 注意字段名
+  status: 'active' | 'suspended';  
+  avatar_url: string | null;      
   created_at: Date;
   updated_at: Date;
 }

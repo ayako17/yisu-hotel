@@ -1,0 +1,36 @@
+/* 在你的全局 CSS 文件中添加 */
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* src/index.css 或全局样式文件 */
+
+/* 打印样式 */
+@media print {
+  .ant-btn,
+  .ant-breadcrumb,
+  .ant-back-top,
+  .ant-card-extra,
+  .ant-tabs-nav,
+  .ant-carousel .slick-arrow,
+  .ant-carousel .slick-dots {
+    display: none !important;
+  }
+  
+  body {
+    background: white;
+    padding: 20px;
+  }
+  
+  .ant-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+  }
+  
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+}

@@ -6,8 +6,7 @@ export async function query<T = any>(sql: string, params?: any[]): Promise<T> {
   console.log('执行SQL:', sql);
   console.log('参数:', params);
   try {
-    // 使用 query 方法代替 execute
-    const [rows] = await pool.query(sql, params);
+    const [rows] = await pool.query(sql, params || []);
     return rows as T;
   } catch (error) {
     console.error('SQL执行失败:', error);
@@ -26,7 +25,8 @@ export async function execute(sql: string, params?: any[]): Promise<ResultSetHea
   console.log('执行SQL:', sql);
   console.log('参数:', params);
   try {
-    const [result] = await pool.execute(sql, params);
+    // 确保 params 不会是 undefined
+    const [result] = await pool.execute(sql, params || []);
     return result as ResultSetHeader;
   } catch (error) {
     console.error('SQL执行失败:', error);

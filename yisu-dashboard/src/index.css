@@ -1,0 +1,6 @@
+/* 确保页面占满全屏，没有边距 */
+#root, body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}

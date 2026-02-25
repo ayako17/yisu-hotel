@@ -1,20 +1,22 @@
-﻿import express from "express";
+﻿// app.ts
+import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { testConnection } from "./config/db";
 import routes from "./routes/index";
-
+import './utils/cronJobs';
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 只设置一次，放在最前面
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// 静态文件服务（用于访问上传的头像）
+// 静态文件服务
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // 使用路由
@@ -25,20 +27,27 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date() });
 });
 
+// 错误处理中间件
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ 
+      code: 413, 
+      msg: '上传文件过大，最大支持50MB' 
+    });
+  }
+  console.error('服务器错误:', err);
+  res.status(500).json({ code: 500, msg: '服务器内部错误' });
+});
+
 // 测试数据库连接并启动服务器
 testConnection().then((isConnected) => {
   if (isConnected) {
     app.listen(PORT, () => {
       console.log(`后端运行在 http://localhost:${PORT}`);
       console.log(`静态文件目录: ${path.join(__dirname, "../uploads")}`);
-      console.log(`数据库主机: ${process.env.DB_HOST}`);
-      console.log(`数据库名称: ${process.env.DB_NAME}`);
+      console.log(`JSON 解析限制: 50mb`);
     });
   } else {
     console.error("数据库连接失败，服务器未启动");
-    console.log("请检查:");
-    console.log("1. 网络连接是否正常");
-    console.log("2. 数据库配置是否正确");
-    console.log("3. 数据库服务是否可用");
   }
 });
