@@ -71,6 +71,103 @@ router.get('/todos', async (req: any, res: any) => {
   }
 });
 
+// // 获取商户入驻审核列表（支持全部状态）
+// router.get('/merchant-applies', async (req: any, res: any) => {
+//   try {
+//     const { page = 1, limit = 10, status = 'pending', keyword = '' } = req.query;
+//     console.log('========== 收到审核列表请求 ==========');
+//     console.log('请求参数:', { page, limit, status, keyword });
+    
+//     const offset = (Number(page) - 1) * Number(limit);
+
+//     // --- 1. 构建基础 SQL ---
+//     let baseSql = `
+//       FROM merchant_profiles mp
+//       LEFT JOIN users u ON mp.user_id = u.user_id
+//       LEFT JOIN audits_apply aa 
+//         ON mp.user_id = aa.merchant_id 
+//         AND aa.apply_id = (
+//           SELECT MAX(apply_id) 
+//           FROM audits_apply 
+//           WHERE merchant_id = mp.user_id 
+//           AND target_type = 'merchant_apply'
+//         )
+//       WHERE 1=1 
+//     `;
+
+//     const params: any[] = [];
+//     const countParams: any[] = [];
+//     // --- 2. 动态添加条件 ---
+//     // 如果不是查全部，则追加状态条件
+//     if (status !== 'all') {
+//       baseSql += ` AND mp.status = ? `;
+//       params.push(status);
+//       countParams.push(status);
+//     }
+//     // 关键词搜索
+//     if (keyword && keyword.trim() !== '') {
+//       baseSql += ` AND (u.username LIKE ? OR u.phone LIKE ?) `;
+//       params.push(`%${keyword}%`, `%${keyword}%`);
+//       countParams.push(`%${keyword}%`, `%${keyword}%`);
+//     }
+//       // --- 3. 数据查询 SQL
+//     const dataSql = `
+//       SELECT 
+//         mp.user_id, mp.license_image_url, mp.apply_reason,
+//         mp.status as merchant_status,
+//         mp.created_at, mp.updated_at, mp.rejection_reason,
+//         u.username as merchant_name, u.phone, u.created_at as registered_at,
+//         aa.apply_id, aa.created_at as apply_time
+//       ${baseSql}
+//       ORDER BY 
+//         CASE mp.status 
+//           WHEN 'pending' THEN 1
+//           WHEN 'approved' THEN 2
+//           WHEN 'rejected' THEN 3
+//           ELSE 4
+//         END,
+//         mp.updated_at DESC 
+//       LIMIT ? OFFSET ?
+//     `;
+    
+//     // 追加分页参数
+//     const dataParams = [...params, Number(limit), Number(offset)];
+
+//     // 总数查询 SQL (直接复用 baseSql 的条件部分)
+//     const countSql = `SELECT COUNT(*) as count ${baseSql}`;
+
+//     // 执行查询
+//     console.log('Executing SQL:', dataSql); // 调试用
+//     const [applies]: any = await pool.query(dataSql, dataParams);
+//     const [countResult]: any = await pool.query(countSql, countParams);
+    
+//     // 统计各状态数量 (这个查询是独立的，不受筛选影响)
+//     const [stats]: any = await pool.query(`
+//       SELECT status, COUNT(*) as count
+//       FROM merchant_profiles
+//       WHERE status IN ('pending', 'approved', 'rejected')
+//       GROUP BY status
+//     `);
+    
+//     res.json({
+//       code: 200,
+//       msg: '获取成功',
+//       data: applies,
+//       statistics: stats,
+//       pagination: {
+//         page: Number(page),
+//         limit: Number(limit),
+//         total: countResult[0]?.count || 0
+//       }
+//     });
+
+//   } catch (error: any) {
+//     console.error('API Error:', error);
+//     res.status(500).json({ code: 500, msg: error.message });
+//   }
+// });
+// yisu-server/src/routes/auditRoutes.ts
+
 // 获取商户入驻审核列表（支持全部状态）
 router.get('/merchant-applies', async (req: any, res: any) => {
   try {
@@ -97,6 +194,7 @@ router.get('/merchant-applies', async (req: any, res: any) => {
 
     const params: any[] = [];
     const countParams: any[] = [];
+    
     // --- 2. 动态添加条件 ---
     // 如果不是查全部，则追加状态条件
     if (status !== 'all') {
@@ -104,20 +202,33 @@ router.get('/merchant-applies', async (req: any, res: any) => {
       params.push(status);
       countParams.push(status);
     }
+    
     // 关键词搜索
     if (keyword && keyword.trim() !== '') {
       baseSql += ` AND (u.username LIKE ? OR u.phone LIKE ?) `;
       params.push(`%${keyword}%`, `%${keyword}%`);
       countParams.push(`%${keyword}%`, `%${keyword}%`);
     }
-      // --- 3. 数据查询 SQL
+    
+    // --- 3. 数据查询 SQL - 添加所有字段 ---
     const dataSql = `
       SELECT 
-        mp.user_id, mp.license_image_url, mp.apply_reason,
+        mp.user_id, 
+        mp.license_image_url, 
+        mp.license_no,           -- 添加统一社会信用代码
+        mp.issuing_authority,    -- 添加发证机关
+        mp.establish_date,       -- 添加成立日期
+        mp.valid_until,          -- 添加有效期限
+        mp.apply_reason,
         mp.status as merchant_status,
-        mp.created_at, mp.updated_at, mp.rejection_reason,
-        u.username as merchant_name, u.phone, u.created_at as registered_at,
-        aa.apply_id, aa.created_at as apply_time
+        mp.created_at, 
+        mp.updated_at, 
+        mp.rejection_reason,
+        u.username as merchant_name, 
+        u.phone, 
+        u.created_at as registered_at,
+        aa.apply_id, 
+        aa.created_at as apply_time
       ${baseSql}
       ORDER BY 
         CASE mp.status 
@@ -137,7 +248,7 @@ router.get('/merchant-applies', async (req: any, res: any) => {
     const countSql = `SELECT COUNT(*) as count ${baseSql}`;
 
     // 执行查询
-    console.log('Executing SQL:', dataSql); // 调试用
+    console.log('Executing SQL:', dataSql);
     const [applies]: any = await pool.query(dataSql, dataParams);
     const [countResult]: any = await pool.query(countSql, countParams);
     

@@ -8,3 +8,15 @@ dist/
 coverage/
 *.tsbuildinfo
 yisu-server/uploads/
+# 排除队友开发的移动端文件夹
+yisu-mobile/
+
+# 排除环境变量文件（含敏感密钥）
+yisu-server/.env
+
+
+# 排除移动端文件夹（队友开发）
+yisu-mobile/
+# 排除环境变量文件（含敏感密钥）
+yisu-server/.env
+

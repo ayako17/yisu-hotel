@@ -1,390 +1,914 @@
-// pages/login/MerchantQualification.tsx
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, Upload, message, Progress } from 'antd';
-import { UploadOutlined, InboxOutlined } from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
+// pages/login/MerchantAudit.tsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Table, 
+  Tag, 
+  Space, 
+  Button, 
+  Card, 
+  Form, 
+  Input, 
+  Select, 
+  Image, 
+  Modal, 
+  Typography, 
+  message,
+  Row,
+  Col,
+  Empty,
+  Badge,
+  Tooltip,
+  Divider,
+  Avatar,
+  Statistic,
+  Descriptions
+} from 'antd';
+import { 
+  SearchOutlined, 
+  ReloadOutlined, 
+  CheckCircleOutlined, 
+  CloseCircleOutlined, 
+  EyeOutlined,
+  FileImageOutlined,
+  ClockCircleOutlined,
+  UserOutlined,
+  PhoneOutlined,
+  ShopOutlined,
+  FileTextOutlined,
+  IdcardOutlined,
+  CalendarOutlined,
+  BankOutlined,
+  EnvironmentOutlined,
+  WarningOutlined
+} from '@ant-design/icons';
 import axios from '../../services/axios';
+import debounce from 'lodash/debounce';
+import dayjs from 'dayjs';
 
-const { Dragger } = Upload;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
+const { Option } = Select;
 
-const MerchantQualification: React.FC = () => {
+// 定义数据类型 - 扩展以包含所有字段
+interface MerchantAuditRecord {
+  apply_id: number;
+  user_id: number;
+  merchant_name: string;
+  phone: string;
+  license_image_url: string;
+  license_no?: string;           // 统一社会信用代码
+  issuing_authority?: string;    // 发证机关
+  establish_date?: string;       // 成立日期
+  valid_until?: string;          // 有效期限
+  apply_reason: string;
+  audit_status: 'pending' | 'approved' | 'rejected';
+  apply_created_at: string;
+  created_at?: string; 
+  registered_at?: string;
+  rejection_reason?: string;
+  key?: string;
+}
+
+const MerchantAudit: React.FC = () => {
+  const navigate = useNavigate(); 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<MerchantAuditRecord | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fileList, setFileList] = useState<any[]>([]);
-  const navigate = useNavigate();
-  const location = useLocation();
-  
-  // 从注册页面传递过来的数据
-  const { userId, phone, username } = location.state || {};
+  const [tableLoading, setTableLoading] = useState(false);
+  const [auditData, setAuditData] = useState<MerchantAuditRecord[]>([]);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
+  const [filters, setFilters] = useState({
+    status: 'pending',
+    keyword: ''
+  });
+  // 状态和获取统计的方法
+  const [statistics, setStatistics] = useState({
+    today_pending: 0,
+    merchant: {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      total: 0
+    }
+  });
 
-  const onFinish = async (values: any) => {
-    if (!userId) {
-      message.error('用户信息丢失，请重新注册');
-      navigate('/register');
+  // 获取统计信息
+  const fetchStatistics = async () => {
+    try {
+      const res = await axios.get('/audit/statistics');
+      if (res.data.code === 200) {
+        setStatistics(res.data.data);
+      }
+    } catch (error) {
+      console.error('获取统计信息失败:', error);
+    }
+  };
+
+  // 初始加载时获取统计信息
+  useEffect(() => {
+    fetchAuditList(pagination.current, pagination.pageSize);
+    fetchStatistics();
+  }, []);
+
+  // 获取审核列表数据（支持分页和搜索）- 接收可选的 queryParams 参数
+  const fetchAuditList = async (page = 1, pageSize = 10, queryParams?: any) => {
+    setTableLoading(true);
+    try {
+      const currentFilters = { ...filters, ...queryParams };
+      
+      const params: any = {
+        page,
+        limit: pageSize,
+        status: currentFilters.status || 'all' 
+      };
+     
+      if (currentFilters.keyword && currentFilters.keyword.trim()) {
+        params.keyword = currentFilters.keyword.trim();
+      }
+
+      const res = await axios.get('/audit/merchant-applies', { params });
+
+      if (res.data.code === 200) {
+        let list = [];
+        if (Array.isArray(res.data.data)) {
+          list = res.data.data.map((item: any, index: number) => ({
+            ...item,
+            key: item.apply_id?.toString() || `row-${Date.now()}-${index}`,
+            merchant_name: item.merchant_name || '待完善',
+            phone: item.phone || '未填写',
+            license_image_url: item.license_image_url,
+            license_no: item.license_no,
+            issuing_authority: item.issuing_authority,
+            establish_date: item.establish_date,
+            valid_until: item.valid_until,
+            apply_reason: item.apply_reason || '申请成为商户',
+            audit_status: item.merchant_status || 'pending',
+            rejection_reason: item.rejection_reason || null,
+            apply_created_at: item.apply_time || item.created_at,
+            created_at: item.created_at,
+            registered_at: item.registered_at
+          }));
+        }
+        
+        setAuditData(list);
+        
+        if (res.data.pagination) {
+          setPagination({
+            current: res.data.pagination.page || page,
+            pageSize: res.data.pagination.limit || pageSize,
+            total: res.data.pagination.total || 0
+          });
+        }
+      } else {
+        message.error(res.data.msg || '获取列表失败');
+      }
+    } catch (error: any) {
+      console.error('获取审核列表错误:', error);
+      message.error(error.response?.data?.msg || '网络连接失败，请重试');
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  // 防抖搜索
+  const debouncedSearch = useMemo(
+    () => debounce((keyword: string) => {
+      setPagination(prev => ({ ...prev, current: 1 }));
+      fetchAuditList(1, pagination.pageSize, { 
+        ...filters, 
+        keyword 
+      });
+    }, 500),
+    [filters, pagination.pageSize]
+  );
+
+  // 处理搜索
+  const handleSearch = () => {
+    setPagination(prev => ({ ...prev, current: 1 }));
+    fetchAuditList(1, pagination.pageSize, filters);
+  };
+
+  // 处理重置
+  const handleReset = () => {
+    const resetFilters = {
+      status: 'pending',
+      keyword: ''
+    };
+    setFilters(resetFilters);
+    setPagination(prev => ({ ...prev, current: 1 }));
+    setTimeout(() => {
+      fetchAuditList(1, pagination.pageSize, resetFilters);
+    }, 0);
+  };
+
+  // 处理表格分页变化
+  const handleTableChange = (pagination: any) => {
+    setPagination({
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+      total: pagination.total
+    });
+    fetchAuditList(pagination.current, pagination.pageSize);
+  };
+
+  // 处理审核
+  const handleAudit = async (status: 'approved' | 'rejected') => {
+    if (!selectedRecord) return;
+    
+    if (!selectedRecord.apply_id) {
+      message.error('数据异常：找不到审核单ID，请联系管理员检查数据库 audits_apply 表');
       return;
+    }
+  
+    if (status === 'rejected' && !rejectReason.trim()) {
+      return message.warning('请填写驳回理由！');
     }
 
     setLoading(true);
     try {
-      const formData = new FormData();
-      
-      // 添加表单数据
-      formData.append('user_id', userId);
-      formData.append('apply_reason', values.apply_reason || '');
-      
-      // 添加上传的营业执照图片
-      if (fileList.length > 0) {
-        fileList.forEach(file => {
-          formData.append('license_images', file.originFileObj);
+      let res;
+      if (status === 'approved') {
+        res = await axios.put(`/audit/applies/${selectedRecord.apply_id}/approve`);
+      } else {
+        res = await axios.put(`/audit/applies/${selectedRecord.apply_id}/reject`, {
+          reason: rejectReason
         });
       }
 
-      const res = await axios.post('/merchant/qualification', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
       if (res.data.code === 200) {
-        message.success('资质上传成功，请等待管理员审核！');
-        // 延迟跳转，让用户看到成功提示
-        setTimeout(() => {
-          navigate('/login');
-        }, 1500);
+        message.success(`已成功${status === 'approved' ? '通过' : '驳回'}该申请`);
+        
+        setAuditData(prev => 
+          prev.map(item => 
+            item.apply_id === selectedRecord.apply_id 
+              ? { 
+                  ...item, 
+                  audit_status: status, 
+                  rejection_reason: status === 'rejected' ? rejectReason : item.rejection_reason 
+                }
+              : item
+          )
+        );
+
+        setIsModalOpen(false);
+        setRejectReason('');
+        setSelectedRecord(null);
+        
+        fetchAuditList(pagination.current, pagination.pageSize);
+        fetchStatistics();
       } else {
-        message.error(res.data.msg || '资质上传失败');
+        message.error(res.data.msg || '操作失败');
       }
     } catch (error: any) {
-      console.error('资质上传错误:', error);
+      console.error('审核操作错误:', error);
       message.error(error.response?.data?.msg || '网络连接失败，请重试');
     } finally {
       setLoading(false);
     }
   };
 
-  // 上传文件配置
-  const uploadProps = {
-    name: 'file',
-    multiple: false,
-    maxCount: 1,
-    fileList,
-    accept: 'image/jpeg,image/png,image/jpg',
-    beforeUpload: (file: File) => {
-      // 验证文件类型
-      const isImage = file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/jpg';
-      if (!isImage) {
-        message.error('只能上传 JPG/PNG 格式的图片！');
-        return Upload.LIST_IGNORE;
-      }
-      
-      // 验证文件大小（5MB）
-      const isLt5M = file.size / 1024 / 1024 < 5;
-      if (!isLt5M) {
-        message.error('图片大小不能超过 5MB！');
-        return Upload.LIST_IGNORE;
-      }
-      
-      setFileList([file]);
-      return false; // 阻止自动上传
+  // 状态标签渲染
+  const renderStatusTag = (status: string) => {
+    const statusMap = {
+      pending: { color: 'processing', text: '待审核', icon: <ClockCircleOutlined /> },
+      approved: { color: 'success', text: '已通过', icon: <CheckCircleOutlined /> },
+      rejected: { color: 'error', text: '已驳回', icon: <CloseCircleOutlined /> }
+    };
+    const { color, text, icon } = statusMap[status as keyof typeof statusMap] || statusMap.pending;
+    
+    return (
+      <Badge 
+        status={color as any} 
+        text={<span><span style={{ marginRight: 4 }}>{icon}</span>{text}</span>}
+      />
+    );
+  };
+
+  // 表格列定义
+  const columns = [
+    {
+      title: '商户信息',
+      key: 'merchant_info',
+      width: 260,
+      fixed: 'left' as const,
+      render: (_: any, record: MerchantAuditRecord) => (
+        <Space direction="vertical" size={2} style={{ gap: 4 }}>
+          <Space align="center">
+            <Avatar 
+              size={36} 
+              icon={<ShopOutlined />} 
+              style={{ 
+                backgroundColor: record.audit_status === 'pending' ? '#1890ff' : 
+                                record.audit_status === 'approved' ? '#52c41a' : '#ff4d4f'
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{record.merchant_name}</div>
+              <div style={{ fontSize: 12, color: '#8c8c8c' }}>ID: {record.user_id}</div>
+            </div>
+          </Space>
+          <div style={{ marginLeft: 44, fontSize: 13, color: '#595959' }}>
+            <PhoneOutlined style={{ marginRight: 6 }} />
+            {record.phone}
+          </div>
+        </Space>
+      ),
     },
-    onRemove: () => {
-      setFileList([]);
+    {
+      title: '营业执照信息',
+      key: 'license_info',
+      width: 200,
+      render: (_: any, record: MerchantAuditRecord) => (
+        <Space direction="vertical" size={2}>
+          <Text strong style={{ fontSize: 13 }}>信用代码: {record.license_no || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>发证机关: {record.issuing_authority || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            有效期: {record.establish_date ? dayjs(record.establish_date).format('YYYY-MM-DD') : '-'} 至 {record.valid_until ? dayjs(record.valid_until).format('YYYY-MM-DD') : '-'}
+          </Text>
+        </Space>
+      ),
     },
-    onChange: ({ fileList }: any) => {
-      setFileList(fileList);
-    }
+    {
+      title: '申请理由',
+      dataIndex: 'apply_reason',
+      key: 'apply_reason',
+      width: 150,
+      ellipsis: {
+        showTitle: false,
+      },
+      render: (text: string) => (
+        <Tooltip placement="topLeft" title={text}>
+          <span style={{ color: '#262626' }}>{text}</span>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '营业执照',
+      dataIndex: 'license_image_url',
+      key: 'license_image_url',
+      width: 80,
+      render: (url: string) => (
+        url ? (
+          <Image 
+            src={url.startsWith('http') ? url : `http://localhost:3000${url}`} 
+            width={40} 
+            height={40}
+            style={{ 
+              borderRadius: 4, 
+              objectFit: 'cover',
+              border: '1px solid #f0f0f0',
+              cursor: 'pointer'
+            }}
+            preview={{
+              mask: <EyeOutlined />,
+              src: url.startsWith('http') ? url : `http://localhost:3000${url}`
+            }}
+          />
+        ) : (
+          <Tag color="default">未上传</Tag>
+        )
+      ),
+    },
+    {
+      title: '申请时间',
+      dataIndex: 'apply_created_at', 
+      key: 'apply_created_at',
+      width: 140,
+      render: (text: string, record: MerchantAuditRecord) => {
+        const dateStr = text || record.created_at;
+        return (
+          <span style={{ color: '#8c8c8c', fontSize: 12 }}>
+            {dateStr ? dayjs(dateStr).format('YYYY-MM-DD HH:mm') : '-'}
+          </span>
+        );
+      },
+    },
+    {
+      title: '审核状态',
+      dataIndex: 'audit_status',
+      key: 'audit_status',
+      width: 100,
+      render: (status: string) => renderStatusTag(status),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      fixed: 'right' as const,
+      render: (_: any, record: MerchantAuditRecord) => (
+        <Button 
+          type="primary" 
+          ghost
+          icon={<EyeOutlined />} 
+          size="middle"
+          onClick={() => {
+            setSelectedRecord(record);
+            setRejectReason(record.rejection_reason || '');
+            setIsModalOpen(true);
+          }}
+          style={{ 
+            borderRadius: 20,
+            borderColor: '#1890ff',
+            color: '#1890ff'
+          }}
+          disabled={record.audit_status !== 'pending'}
+        >
+          审核
+        </Button>
+      ),
+    },
+  ];
+
+  const todayPending = statistics.today_pending;
+  const pendingCount = statistics.merchant.pending;
+
+  // 检查资质是否过期
+  const isLicenseExpired = (validUntil?: string) => {
+    if (!validUntil) return false;
+    return dayjs(validUntil).isBefore(dayjs());
   };
 
   return (
-    <div style={{
+    <div style={{ 
+      padding: '24px',
       minHeight: '100vh',
-      width: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px 16px',
-      background: 'radial-gradient(circle at 10% 30%, #e6f0ff 0%, #f5f7fa 90%)',
+      background: '#f0f2f5'
     }}>
       <Card 
-        title={
-          <span style={{ 
-            fontSize: '1.6rem', 
-            fontWeight: 600, 
-            background: 'linear-gradient(145deg, #0066FF, #0050cc)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '1px'
-          }}>
-            🏢 商户资质认证
-          </span>
-        }
-        style={{ 
-          width: '100%',
-          maxWidth: 700,
-          borderRadius: 24,
-          boxShadow: '0 20px 40px -12px rgba(0,102,255,0.25)',
-          border: '1px solid rgba(255,255,255,0.3)',
-          backdropFilter: 'blur(8px)',
-          backgroundColor: 'rgba(255,255,255,0.95)',
-        }}
         bordered={false}
-        headStyle={{ 
-          borderBottom: '1px solid #f0f0f0',
-          padding: '20px 28px',
+        style={{
+          borderRadius: 16,
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
         }}
-        bodyStyle={{ padding: '32px 28px' }}
       >
+        {/* 页面标题 */}
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between',
-          marginBottom: 32,
+          marginBottom: 24,
           flexWrap: 'wrap',
-          gap: 16,
+          gap: 16
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Progress 
-              type="circle" 
-              percent={50} 
-              width={72} 
-              format={() => '2/2'} 
-              strokeColor="#0066FF"
-              trailColor="#e6f0ff"
-              strokeWidth={8}
-            />
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 600, color: '#1a1a1a' }}>最后一步</div>
-              <div style={{ fontSize: 14, color: '#666', marginTop: 4 }}>上传资质材料，等待审核</div>
-            </div>
+            <div style={{
+              width: 6,
+              height: 28,
+              background: 'linear-gradient(180deg, #1890ff 0%, #096dd9 100%)',
+              borderRadius: 3
+            }} />
+            <Title level={3} style={{ margin: 0, fontWeight: 600, color: '#1e293b' }}>
+              商户入驻审核
+            </Title>
+            <Tag color="blue" style={{ marginLeft: 8, borderRadius: 20, padding: '0 12px' }}>
+              待审核: {pendingCount}
+            </Tag>
           </div>
-          <Card 
-            size="small" 
-            style={{ 
-              backgroundColor: '#f9fcff',
-              borderColor: '#cce4ff',
-              borderRadius: 12,
-              borderStyle: 'dashed',
-              flex: '0 1 auto',
-            }}
-            bodyStyle={{ padding: '10px 18px' }}
-          >
-            <span style={{ color: '#0066FF', fontSize: 14 }}>
-              ⏱️ 审核约1-3个工作日
-            </span>
-          </Card>
+          <Statistic 
+            title="今日待办" 
+            value={todayPending} 
+            suffix="项"
+            valueStyle={{ color: '#1890ff', fontSize: 24 }}
+          />
         </div>
 
-        <Form
-          onFinish={onFinish}
-          layout="vertical"
-          size="large"
-          requiredMark="optional"
+        {/* 筛选表单 */}
+        <Card 
+          size="small" 
+          style={{ 
+            marginBottom: 24, 
+            background: '#fafbfc',
+            borderRadius: 12,
+            border: '1px solid #f0f0f0'
+          }}
+          bodyStyle={{ padding: '20px 24px' }}
         >
-          {/* 商户信息卡片区域 */}
-          <div style={{
-            background: '#fafcff',
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 24,
-            border: '1px solid #eef4ff'
-          }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#0050b3', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ display: 'inline-block', width: 4, height: 18, background: '#0066FF', borderRadius: 2 }}></span>
-              商户基本信息
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
-              <div style={{ flex: '1 1 200px' }}>
-                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>商户名称</div>
-                <Input 
-                  value={username || '新商户'} 
-                  disabled 
-                  style={{ 
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    borderRadius: 12,
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                    fontWeight: 500,
-                    color: '#1e293b'
-                  }}
-                  bordered={true}
-                />
-              </div>
-              <div style={{ flex: '1 1 200px' }}>
-                <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>联系电话</div>
-                <Input 
-                  value={phone || ''} 
-                  disabled 
-                  style={{ 
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    borderRadius: 12,
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                    fontWeight: 500,
-                    color: '#1e293b'
-                  }}
-                  bordered={true}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 营业执照上传 */}
-          <Form.Item
-            label={<span style={{ fontWeight: 600, fontSize: 15, color: '#1e293b' }}>📄 营业执照</span>}
-            required
-            tooltip={{ title: '支持 JPG/PNG 格式，大小不超过 5MB', icon: <span style={{ color: '#0066FF' }}>ⓘ</span> }}
-            help={<span style={{ color: '#6b7280' }}>请上传清晰可见的营业执照扫描件或照片</span>}
-            style={{ marginBottom: 28 }}
-          >
-            <Dragger 
-              {...uploadProps} 
-              style={{ 
-                background: '#fbfdff', 
-                borderRadius: 20,
-                border: '2px dashed #cce4ff',
-                transition: 'all 0.3s',
-                padding: '24px 12px'
-              }}
-              className="custom-dragger"
-            >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined style={{ color: '#0066FF', fontSize: 48 }} />
-              </p>
-              <p className="ant-upload-text" style={{ fontSize: 16, color: '#1e293b', marginTop: 12 }}>
-                点击或拖拽文件到此区域上传
-              </p>
-              <p className="ant-upload-hint" style={{ color: '#6b7280' }}>
-                支持单个 JPG/PNG 图片，不超过 5MB
-              </p>
-            </Dragger>
-          </Form.Item>
-
-          {/* 入驻理由 */}
-          <Form.Item
-            name="apply_reason"
-            label={<span style={{ fontWeight: 600, fontSize: 15, color: '#1e293b' }}>📋 入驻理由</span>}
-            rules={[
-              { required: true, message: '请输入入驻理由' },
-              { min: 10, message: '请详细描述您的入驻理由，至少10个字' }
-            ]}
-            style={{ marginBottom: 28 }}
-          >
-            <TextArea
-              rows={4}
-              placeholder="请详细说明您的业务范围、经营规模以及入驻平台的目的"
-              maxLength={200}
-              showCount
-              style={{ 
-                borderRadius: 16,
-                padding: '14px 16px',
-                borderColor: '#e2e8f0',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-                fontSize: 15,
-                resize: 'vertical'
-              }}
-            />
-          </Form.Item>
-
-          {/* 温馨提示 - 重新设计为更优雅的信息卡片 */}
-          <Card 
-            size="small" 
-            style={{ 
-              marginBottom: 28,
-              backgroundColor: '#f3faff',
-              borderColor: '#b8dbff',
-              borderRadius: 16,
-              borderLeftWidth: 6,
-              borderLeftColor: '#0066FF',
-              boxShadow: '0 4px 12px rgba(0,102,255,0.08)'
-            }}
-            bodyStyle={{ padding: '16px 20px' }}
-          >
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 24 }}>📌</span>
-              <div>
-                <p style={{ fontWeight: 700, color: '#0050b3', marginBottom: 10, fontSize: 15 }}>审核说明</p>
-                <ul style={{ 
-                  paddingLeft: 20, 
-                  marginBottom: 0, 
-                  color: '#2c3e50', 
-                  lineHeight: 1.8,
-                  listStyleType: 'circle'
-                }}>
-                  <li style={{ fontSize: 14 }}>管理员将在1-3个工作日内完成审核</li>
-                  <li style={{ fontSize: 14 }}>审核通过后您将收到短信通知</li>
-                  <li style={{ fontSize: 14 }}>审核期间请保持电话畅通</li>
-                </ul>
-              </div>
-            </div>
-          </Card>
-
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Button 
-              type="primary" 
-              htmlType="submit" 
-              block 
-              loading={loading}
-              style={{ 
-                height: 52, 
-                fontSize: 17, 
-                borderRadius: 16,
-                background: 'linear-gradient(145deg, #0066FF, #0050cc)',
-                border: 'none',
-                boxShadow: '0 8px 16px rgba(0,102,255,0.3)',
-                fontWeight: 600,
-                letterSpacing: 2
-              }}
-              disabled={fileList.length === 0}
-            >
-              {fileList.length === 0 ? '⬆️ 请先上传营业执照' : '✅ 提交审核'}
-            </Button>
-            
-            <div style={{ 
-              marginTop: 24, 
-              textAlign: 'center',
-              fontSize: 14,
-              color: '#6b7280',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6
-            }}>
-              <span>稍后上传？</span>
-              <Button 
-                type="link" 
-                style={{ 
-                  padding: '4px 12px', 
-                  height: 'auto',
-                  borderRadius: 30,
-                  background: '#f0f7ff',
-                  color: '#0066FF',
-                  fontWeight: 500
+          <Form layout="inline" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+            <Form.Item label="商户名称" style={{ marginBottom: 0 }}>
+              <Input 
+                placeholder="请输入商户名" 
+                allowClear 
+                style={{ width: 200, borderRadius: 8 }}
+                prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                value={filters.keyword}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFilters(prev => ({ ...prev, keyword: value }));
+                  debouncedSearch(value);
                 }}
-                onClick={() => {
-                  message.warning('您可以在"个人中心-商户认证"中继续提交资质');
-                  navigate('/login');
+                onPressEnter={() => {
+                  setPagination(prev => ({ ...prev, current: 1 }));
+                  fetchAuditList(1, pagination.pageSize, filters);
+                }}
+              />
+            </Form.Item>
+            <Form.Item label="审核状态" style={{ marginBottom: 0 }}>
+              <Select 
+                value={filters.status} 
+                style={{ width: 140, borderRadius: 8 }}
+                onChange={(value) => {
+                  setFilters(prev => ({ ...prev, status: value }));
+                  fetchAuditList(1, pagination.pageSize, { status: value });
                 }}
               >
-                暂不提交
-              </Button>
-            </div>
-          </Form.Item>
-        </Form>
+                <Option value="all">全部</Option>
+                <Option value="pending">待审核</Option>
+                <Option value="approved">已通过</Option>
+                <Option value="rejected">已驳回</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Space>
+                <Button 
+                  type="primary" 
+                  icon={<SearchOutlined />} 
+                  onClick={handleSearch}
+                  style={{ 
+                    borderRadius: 8,
+                    background: 'linear-gradient(145deg, #1890ff, #096dd9)',
+                    border: 'none'
+                  }}
+                >
+                  搜索
+                </Button>
+                <Button 
+                  icon={<ReloadOutlined />} 
+                  onClick={handleReset}
+                  style={{ borderRadius: 8 }}
+                >
+                  重置
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Card>
+
+        {/* 数据表格 */}
+        <Table 
+          columns={columns}
+          dataSource={auditData}
+          loading={tableLoading}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total) => `共 ${total} 条记录`,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            onChange: (page, pageSize) => {
+              setPagination({ ...pagination, current: page, pageSize });
+              fetchAuditList(page, pageSize);
+            }
+          }}
+          onChange={handleTableChange}
+          scroll={{ x: 1600 }}
+          rowKey="key"
+          rowClassName={(record) => 
+            record.audit_status === 'pending' ? 'row-pending' : ''
+          }
+          style={{ marginTop: 8 }}
+          locale={{
+            emptyText: (
+              <Empty 
+                image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                description={
+                  <span style={{ color: '#8c8c8c' }}>
+                    {filters.status === 'pending' ? '暂无待审核申请' : '暂无相关数据'}
+                  </span>
+                }
+              />
+            )
+          }}
+        />
       </Card>
+
+      {/* 详情及审核弹窗 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 4,
+              height: 20,
+              background: '#1890ff',
+              borderRadius: 2,
+              display: 'inline-block'
+            }} />
+            <span style={{ fontSize: 18, fontWeight: 600 }}>商户入驻详情审批</span>
+            {selectedRecord && (
+              <Tag color={selectedRecord.audit_status === 'pending' ? 'processing' : 
+                           selectedRecord.audit_status === 'approved' ? 'success' : 'error'}
+                   style={{ marginLeft: 8 }}>
+                {selectedRecord.audit_status === 'pending' ? '待审核' : 
+                 selectedRecord.audit_status === 'approved' ? '已通过' : '已驳回'}
+              </Tag>
+            )}
+          </div>
+        }
+        open={isModalOpen}
+        onCancel={() => {
+          setIsModalOpen(false);
+          setRejectReason('');
+          setSelectedRecord(null);
+        }}
+        width={800}
+        footer={selectedRecord?.audit_status === 'pending' ? [
+          <Button 
+            key="close" 
+            onClick={() => {
+              setIsModalOpen(false);
+              setRejectReason('');
+              setSelectedRecord(null);
+            }}
+            style={{ borderRadius: 8 }}
+          >
+            取消
+          </Button>,
+          <Button 
+            key="reject" 
+            danger 
+            icon={<CloseCircleOutlined />} 
+            onClick={() => handleAudit('rejected')}
+            loading={loading}
+            style={{ borderRadius: 8 }}
+          >
+            驳回申请
+          </Button>,
+          <Button 
+            key="approve" 
+            type="primary" 
+            icon={<CheckCircleOutlined />} 
+            onClick={() => handleAudit('approved')}
+            loading={loading}
+            style={{ 
+              borderRadius: 8,
+              background: 'linear-gradient(145deg, #52c41a, #389e0d)',
+              border: 'none'
+            }}
+          >
+            通过申请
+          </Button>,
+        ] : [
+          <Button 
+            key="close" 
+            type="primary" 
+            onClick={() => {
+              setIsModalOpen(false);
+              setRejectReason('');
+              setSelectedRecord(null);
+            }}
+            style={{ borderRadius: 8 }}
+          >
+            关 闭
+          </Button>
+        ]}
+      >
+        {selectedRecord && (
+          <div style={{ padding: '16px 4px' }}>
+            {/* 基本信息卡片 */}
+            <Card 
+              size="small" 
+              style={{ 
+                marginBottom: 24, 
+                borderRadius: 12,
+                background: '#fafafa',
+                border: '1px solid #f0f0f0'
+              }}
+              bodyStyle={{ padding: '20px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                <Avatar 
+                  size={48} 
+                  icon={<ShopOutlined />} 
+                  style={{ 
+                    backgroundColor: '#1890ff',
+                    marginRight: 16
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: '#1e293b' }}>
+                    {selectedRecord.merchant_name}
+                  </div>
+                  <div style={{ display: 'flex', gap: 24, marginTop: 4, flexWrap: 'wrap' }}>
+                    <Text type="secondary">
+                      <UserOutlined style={{ marginRight: 6 }} />
+                      ID: {selectedRecord.user_id}
+                    </Text>
+                    <Text type="secondary">
+                      <PhoneOutlined style={{ marginRight: 6 }} />
+                      {selectedRecord.phone}
+                    </Text>
+                  </div>
+                </div>
+              </div>
+              
+              <Divider style={{ margin: '16px 0' }} />
+              
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <div style={{ fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>申请时间</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>
+                    {selectedRecord.created_at ? dayjs(selectedRecord.created_at).format('YYYY-MM-DD HH:mm') : '-'}
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <div style={{ fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>注册时间</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>
+                    {selectedRecord.registered_at 
+                      ? dayjs(selectedRecord.registered_at).format('YYYY-MM-DD HH:mm')
+                      : '-'}
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* 营业执照信息卡片 */}
+            <Card 
+              size="small" 
+              title={
+                <Space>
+                  <IdcardOutlined style={{ color: '#1890ff' }} />
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>营业执照信息</span>
+                </Space>
+              }
+              style={{ marginBottom: 24, borderRadius: 12 }}
+              headStyle={{ borderBottom: '1px solid #f0f0f0', padding: '12px 20px' }}
+              bodyStyle={{ padding: '16px 20px' }}
+            >
+              <Descriptions bordered column={2} size="small">
+                <Descriptions.Item label="统一社会信用代码" span={2}>
+                  <Text copyable>{selectedRecord.license_no || '-'}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="发证机关" span={2}>
+                  {selectedRecord.issuing_authority || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="成立日期">
+                  {selectedRecord.establish_date ? dayjs(selectedRecord.establish_date).format('YYYY-MM-DD') : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="有效期限">
+                  <Space>
+                    {selectedRecord.valid_until ? dayjs(selectedRecord.valid_until).format('YYYY-MM-DD') : '-'}
+                    {selectedRecord.valid_until && isLicenseExpired(selectedRecord.valid_until) && (
+                      <Tag color="red" icon={<WarningOutlined />}>已过期</Tag>
+                    )}
+                  </Space>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            {/* 申请理由 */}
+            <Card 
+              size="small" 
+              title={
+                <Space>
+                  <FileTextOutlined style={{ color: '#1890ff' }} />
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>申请理由</span>
+                </Space>
+              }
+              style={{ marginBottom: 24, borderRadius: 12 }}
+              headStyle={{ borderBottom: '1px solid #f0f0f0', padding: '12px 20px' }}
+              bodyStyle={{ padding: '16px 20px', background: '#fafafa' }}
+            >
+              <div style={{ 
+                background: '#fff', 
+                padding: '16px 20px', 
+                borderRadius: 8,
+                border: '1px solid #f0f0f0',
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: '#262626'
+              }}>
+                {selectedRecord.apply_reason}
+              </div>
+            </Card>
+
+            {/* 营业执照图片 */}
+            <Card 
+              size="small" 
+              title={
+                <Space>
+                  <FileImageOutlined style={{ color: '#1890ff' }} />
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>营业执照图片</span>
+                </Space>
+              }
+              style={{ marginBottom: 24, borderRadius: 12 }}
+              headStyle={{ borderBottom: '1px solid #f0f0f0', padding: '12px 20px' }}
+              bodyStyle={{ padding: '16px 20px', background: '#fafafa' }}
+            >
+              <div style={{ textAlign: 'center' }}>
+                {selectedRecord.license_image_url ? (
+                  <Image 
+                    src={selectedRecord.license_image_url?.startsWith('http') 
+                      ? selectedRecord.license_image_url 
+                      : `http://localhost:3000${selectedRecord.license_image_url}`
+                    } 
+                    width={400}
+                    style={{ 
+                      borderRadius: 12,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                    }}
+                    fallback="/images/fallback.png"
+                  />
+                ) : (
+                  <Empty 
+                    image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                    description="商户未上传营业执照"
+                  />
+                )}
+                <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
+                  点击图片可查看原图
+                </div>
+              </div>
+            </Card>
+
+            {/* 驳回理由 */}
+            {selectedRecord.audit_status === 'pending' ? (
+              <Card 
+                size="small" 
+                title={
+                  <Space>
+                    <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>驳回理由</span>
+                    <Text type="secondary" style={{ fontSize: 13, marginLeft: 8 }}>
+                      （仅在驳回时必填）
+                    </Text>
+                  </Space>
+                }
+                style={{ borderRadius: 12, borderColor: '#ffccc7' }}
+                headStyle={{ borderBottom: '1px solid #ffccc7', padding: '12px 20px' }}
+                bodyStyle={{ padding: '16px 20px' }}
+              >
+                <TextArea 
+                  rows={4} 
+                  placeholder="请输入驳回具体原因，如：照片不清晰、资质已过期、信息不完整等" 
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  style={{ 
+                    borderRadius: 8,
+                    borderColor: '#d9d9d9',
+                    resize: 'vertical'
+                  }}
+                  showCount
+                  maxLength={200}
+                />
+                <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 13 }}>
+                  驳回理由将在商户端展示，请清晰说明问题
+                </div>
+              </Card>
+            ) : selectedRecord.audit_status === 'rejected' && selectedRecord.rejection_reason && (
+              <Card 
+                size="small" 
+                title={
+                  <Space>
+                    <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>驳回原因</span>
+                  </Space>
+                }
+                style={{ borderRadius: 12, background: '#fff2f0', borderColor: '#ffccc7' }}
+                headStyle={{ borderBottom: '1px solid #ffccc7', padding: '12px 20px' }}
+                bodyStyle={{ padding: '16px 20px' }}
+              >
+                <div style={{ 
+                  color: '#ff4d4f',
+                  background: '#fff',
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #ffccc7'
+                }}>
+                  {selectedRecord.rejection_reason}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+      </Modal>
+
       <style>{`
-        .custom-dragger:hover {
-          border-color: #0066FF !important;
-          background: #f5fbff !important;
+        .row-pending {
+          background: #fff7e6;
+          transition: all 0.3s;
         }
-        .ant-upload-text {
-          color: #1e293b;
+        .row-pending:hover {
+          background: #ffe7ba !important;
         }
-        .ant-upload-hint {
-          color: #6b7280;
+        .ant-table-row {
+          cursor: pointer;
+        }
+        .ant-table-row:hover > td {
+          background: #f5f5f5 !important;
+        }
+        .row-pending.ant-table-row:hover > td {
+          background: #ffe7ba !important;
         }
       `}</style>
     </div>
   );
 };
 
-export default MerchantQualification;
+export default MerchantAudit;

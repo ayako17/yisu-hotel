@@ -39,6 +39,7 @@ const upload = multer({
     }
   }
 });
+
 // 资质上传接口
 router.post('/qualification', 
   authenticate,
@@ -48,7 +49,15 @@ router.post('/qualification',
     try {
       await connection.beginTransaction();
 
-      const { user_id, apply_reason } = req.body;
+      // 从请求体中获取所有字段
+      const { 
+        user_id, 
+        license_no,           // 统一社会信用代码
+        issuing_authority,    // 发证机关
+        establish_date,       // 成立日期
+        valid_until,          // 有效期限
+        apply_reason 
+      } = req.body;
       
       if (!user_id) {
         await connection.rollback();
@@ -69,24 +78,45 @@ router.post('/qualification',
       );
 
       if (merchant.length === 0) {
-        // 创建新商户资料 - 同时设置 created_at 和 updated_at
+        // 创建新商户资料 - 包含所有字段
         await connection.execute(
           `INSERT INTO merchant_profiles 
-           (user_id, license_image_url, apply_reason, status, created_at, updated_at) 
-           VALUES (?, ?, ?, 'pending', NOW(), NOW())`,
-          [user_id, license_image_url, apply_reason || null]
+           (user_id, license_image_url, license_no, issuing_authority, 
+            establish_date, valid_until, apply_reason, status, created_at, updated_at) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+          [
+            user_id, 
+            license_image_url, 
+            license_no || null, 
+            issuing_authority || null,
+            establish_date || null, 
+            valid_until || null, 
+            apply_reason || null
+          ]
         );
         console.log('创建商户资料成功:', user_id);
       } else {
-        // 更新商户资料 - 不修改 created_at
+        // 更新商户资料 - 更新所有字段
         await connection.execute(
           `UPDATE merchant_profiles 
            SET license_image_url = ?, 
+               license_no = COALESCE(?, license_no),
+               issuing_authority = COALESCE(?, issuing_authority),
+               establish_date = COALESCE(?, establish_date),
+               valid_until = COALESCE(?, valid_until),
                apply_reason = ?,
                status = 'pending',
                updated_at = NOW()
            WHERE user_id = ?`,
-          [license_image_url, apply_reason || null, user_id]
+          [
+            license_image_url, 
+            license_no || null, 
+            issuing_authority || null,
+            establish_date || null, 
+            valid_until || null, 
+            apply_reason || null, 
+            user_id
+          ]
         );
         console.log('更新商户资料成功:', user_id);
       }
@@ -96,7 +126,7 @@ router.post('/qualification',
         `SELECT apply_id, audit_status 
          FROM audits_apply 
          WHERE merchant_id = ? 
-         AND target_type = 'hotel_apply'
+         AND target_type = 'merchant_apply'
          AND audit_status = 'pending'
          ORDER BY created_at DESC 
          LIMIT 1`,
@@ -107,6 +137,10 @@ router.post('/qualification',
       if (existingApplies.length === 0) {
         const change_data = JSON.stringify({
           license_image_url,
+          license_no,
+          issuing_authority,
+          establish_date,
+          valid_until,
           apply_reason: apply_reason || '申请成为商户',
           apply_time: new Date().toISOString()
         });
@@ -122,7 +156,7 @@ router.post('/qualification',
             created_at
           ) VALUES (?, ?, ?, ?, ?, 'pending', NOW())
         `, [
-          'hotel_apply',
+          'merchant_apply',  // 改为 merchant_apply，与审核接口一致
           user_id,
           user_id,
           change_data,
@@ -140,9 +174,13 @@ router.post('/qualification',
         data: {
           user_id,
           license_image_url,
+          license_no,
+          issuing_authority,
+          establish_date,
+          valid_until,
           status: 'pending',
           apply_id: existingApplies[0]?.apply_id || null,
-          created_at: new Date()  // 返回创建时间
+          created_at: new Date()
         }
       });
 

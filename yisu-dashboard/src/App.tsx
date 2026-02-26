@@ -7,7 +7,7 @@ import MerchantLayout from './layout/MerchantLayout';
 import Login from './pages/login/Login';
 import Register from './pages/login/Register';
 import Dashboard from './pages/admin/dashboard/index';
-import MerchantAudit from './pages/audit/MerchantAudit';
+import MerchantAudit from './pages/admin/audit/MerchantAudit';
 import HotelAudit from './pages/admin/audit/HotelAudit';
 import AdAudit from './pages/admin/audit/AdAudit';
 import FinanceStats from './pages/admin/finance/FinanceStats';
@@ -81,7 +81,7 @@ const App: React.FC = () => {
               <Route path="admin-management" element={<AdminManagement />} />
             </Route>
 
-              
+
             <Route path="ads-management" element={<AdManagement />} />
           </Route>
 

@@ -1,4 +1,4 @@
-// pages/admin/MerchantAudit.tsx
+// yisu-dashboard/src/pages/admin/audit/MerchantAudit.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -21,7 +21,8 @@ import {
   Tooltip,
   Divider,
   Avatar,
-  Statistic
+  Statistic,
+  Descriptions
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -34,21 +35,32 @@ import {
   UserOutlined,
   PhoneOutlined,
   ShopOutlined,
-  FileTextOutlined} from '@ant-design/icons';
+  FileTextOutlined,
+  IdcardOutlined,
+  CalendarOutlined,
+  BankOutlined,
+  EnvironmentOutlined,
+  WarningOutlined
+} from '@ant-design/icons';
 import axios from '../../../services/axios';
 import debounce from 'lodash/debounce';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { Option } = Select;
 
-// 定义数据类型
+// 定义数据类型 - 扩展以包含所有字段
 interface MerchantAuditRecord {
   apply_id: number;
   user_id: number;
   merchant_name: string;
   phone: string;
   license_image_url: string;
+  license_no?: string;           // 统一社会信用代码
+  issuing_authority?: string;    // 发证机关
+  establish_date?: string;       // 成立日期
+  valid_until?: string;          // 有效期限
   apply_reason: string;
   audit_status: 'pending' | 'approved' | 'rejected';
   apply_created_at: string;
@@ -75,134 +87,125 @@ const MerchantAudit: React.FC = () => {
     status: 'pending',
     keyword: ''
   });
-    // 状态和获取统计的方法
-    const [statistics, setStatistics] = useState({
+  // 状态和获取统计的方法
+  const [statistics, setStatistics] = useState({
     today_pending: 0,
     merchant: {
-        pending: 0,
-        approved: 0,
-        rejected: 0,
-        total: 0
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      total: 0
     }
-    });
+  });
 
-    // 获取统计信息
-    const fetchStatistics = async () => {
+  // 获取统计信息
+  const fetchStatistics = async () => {
     try {
-        const res = await axios.get('/audit/statistics');
-        if (res.data.code === 200) {
+      const res = await axios.get('/audit/statistics');
+      if (res.data.code === 200) {
         setStatistics(res.data.data);
-        }
+      }
     } catch (error) {
-        console.error('获取统计信息失败:', error);
+      console.error('获取统计信息失败:', error);
     }
-    };
+  };
 
-    // 初始加载时获取统计信息
-    useEffect(() => {
-    fetchAuditList(pagination.current, pagination.pageSize);
-    fetchStatistics(); // 单独获取统计信息
-    }, []);
-
-// 获取审核列表数据（支持分页和搜索）- 接收可选的 queryParams 参数
-const fetchAuditList = async (page = 1, pageSize = 10, queryParams?: any) => {
-  setTableLoading(true);
-  try {
-    // 1. 合并状态：优先使用传入的 queryParams，否则使用当前 state 中的 filters
-    const currentFilters = { ...filters, ...queryParams };
-    
-    const params: any = {
-      page,
-      limit: pageSize,
-      status: currentFilters.status || 'all' 
-    };
-   
-    // 如果有搜索关键词
-    if (currentFilters.keyword && currentFilters.keyword.trim()) {
-      params.keyword = currentFilters.keyword.trim();
-    }
- // 发送请求
-    console.log('前端发送参数:', params); 
-    const res = await axios.get('/audit/merchant-applies', { params });
-
-    if (res.data.code === 200) {
-      let list = [];
-      if (Array.isArray(res.data.data)) {
-        list = res.data.data.map((item: any, index: number) => ({
-          ...item,
-          key: item.apply_id?.toString() || `row-${Date.now()}-${index}`,
-          merchant_name: item.merchant_name || '待完善',
-          phone: item.phone || '未填写',
-          license_image_url: item.license_image_url,
-          apply_reason: item.apply_reason || '申请成为商户',
-          audit_status: item.merchant_status || 'pending',
-          rejection_reason: item.rejection_reason || null,
-          apply_created_at: item.apply_time || item.created_at,
-          created_at: item.created_at,
-          registered_at: item.registered_at
-        }));
-      }
-      
-      setAuditData(list);
-      
-      // 设置分页信息
-      if (res.data.pagination) {
-        setPagination({
-          current: res.data.pagination.page || page,
-          pageSize: res.data.pagination.limit || pageSize,
-          total: res.data.pagination.total || 0
-        });
-      }
-    } else {
-      message.error(res.data.msg || '获取列表失败');
-    }
-  } catch (error: any) {
-    console.error('获取审核列表错误:', error);
-    message.error(error.response?.data?.msg || '网络连接失败，请重试');
-  } finally {
-    setTableLoading(false);
-  }
-};
-
-  // 初始加载
+  // 初始加载时获取统计信息
   useEffect(() => {
     fetchAuditList(pagination.current, pagination.pageSize);
+    fetchStatistics();
   }, []);
 
-  // 防抖搜索 - 接收keyword参数
-const debouncedSearch = useMemo(
-  () => debounce((keyword: string) => {
-    setPagination(prev => ({ ...prev, current: 1 }));
-    // 传递最新的keyword
-    fetchAuditList(1, pagination.pageSize, { 
-      ...filters, 
-      keyword 
-    });
-  }, 500),
-  [filters, pagination.pageSize] // 依赖项
-);
+  // 获取审核列表数据（支持分页和搜索）- 接收可选的 queryParams 参数
+  const fetchAuditList = async (page = 1, pageSize = 10, queryParams?: any) => {
+    setTableLoading(true);
+    try {
+      const currentFilters = { ...filters, ...queryParams };
+      
+      const params: any = {
+        page,
+        limit: pageSize,
+        status: currentFilters.status || 'all' 
+      };
+     
+      if (currentFilters.keyword && currentFilters.keyword.trim()) {
+        params.keyword = currentFilters.keyword.trim();
+      }
 
-// 处理搜索
-const handleSearch = () => {
-  setPagination(prev => ({ ...prev, current: 1 }));
-  // 显式传递当前filters状态，确保准确
-  fetchAuditList(1, pagination.pageSize, filters);
-};
+      const res = await axios.get('/audit/merchant-applies', { params });
 
-// 处理重置
-const handleReset = () => {
-  const resetFilters = {
-    status: 'pending',
-    keyword: ''
+      if (res.data.code === 200) {
+        let list = [];
+        if (Array.isArray(res.data.data)) {
+          list = res.data.data.map((item: any, index: number) => ({
+            ...item,
+            key: item.apply_id?.toString() || `row-${Date.now()}-${index}`,
+            merchant_name: item.merchant_name || '待完善',
+            phone: item.phone || '未填写',
+            license_image_url: item.license_image_url,
+            license_no: item.license_no,
+            issuing_authority: item.issuing_authority,
+            establish_date: item.establish_date,
+            valid_until: item.valid_until,
+            apply_reason: item.apply_reason || '申请成为商户',
+            audit_status: item.merchant_status || 'pending',
+            rejection_reason: item.rejection_reason || null,
+            apply_created_at: item.apply_time || item.created_at,
+            created_at: item.created_at,
+            registered_at: item.registered_at
+          }));
+        }
+        
+        setAuditData(list);
+        
+        if (res.data.pagination) {
+          setPagination({
+            current: res.data.pagination.page || page,
+            pageSize: res.data.pagination.limit || pageSize,
+            total: res.data.pagination.total || 0
+          });
+        }
+      } else {
+        message.error(res.data.msg || '获取列表失败');
+      }
+    } catch (error: any) {
+      console.error('获取审核列表错误:', error);
+      message.error(error.response?.data?.msg || '网络连接失败，请重试');
+    } finally {
+      setTableLoading(false);
+    }
   };
-  // 1. 更新UI状态
-  setFilters(resetFilters);
-  setPagination(prev => ({ ...prev, current: 1 }));
-  // 2. 直接传递重置后的值
-  setTimeout(() => {
-    fetchAuditList(1, pagination.pageSize, resetFilters);
-  }, 0);
-};
+
+  // 防抖搜索
+  const debouncedSearch = useMemo(
+    () => debounce((keyword: string) => {
+      setPagination(prev => ({ ...prev, current: 1 }));
+      fetchAuditList(1, pagination.pageSize, { 
+        ...filters, 
+        keyword 
+      });
+    }, 500),
+    [filters, pagination.pageSize]
+  );
+
+  // 处理搜索
+  const handleSearch = () => {
+    setPagination(prev => ({ ...prev, current: 1 }));
+    fetchAuditList(1, pagination.pageSize, filters);
+  };
+
+  // 处理重置
+  const handleReset = () => {
+    const resetFilters = {
+      status: 'pending',
+      keyword: ''
+    };
+    setFilters(resetFilters);
+    setPagination(prev => ({ ...prev, current: 1 }));
+    setTimeout(() => {
+      fetchAuditList(1, pagination.pageSize, resetFilters);
+    }, 0);
+  };
 
   // 处理表格分页变化
   const handleTableChange = (pagination: any) => {
@@ -218,10 +221,9 @@ const handleReset = () => {
   const handleAudit = async (status: 'approved' | 'rejected') => {
     if (!selectedRecord) return;
     
-    // 如果 apply_id 不存在，提示错误，不要发请求
     if (!selectedRecord.apply_id) {
-        message.error('数据异常：找不到审核单ID，请联系管理员检查数据库 audits_apply 表');
-        return;
+      message.error('数据异常：找不到审核单ID，请联系管理员检查数据库 audits_apply 表');
+      return;
     }
   
     if (status === 'rejected' && !rejectReason.trim()) {
@@ -242,7 +244,6 @@ const handleReset = () => {
       if (res.data.code === 200) {
         message.success(`已成功${status === 'approved' ? '通过' : '驳回'}该申请`);
         
-        // 更新列表中的状态
         setAuditData(prev => 
           prev.map(item => 
             item.apply_id === selectedRecord.apply_id 
@@ -259,9 +260,8 @@ const handleReset = () => {
         setRejectReason('');
         setSelectedRecord(null);
         
-        // 刷新当前页
         fetchAuditList(pagination.current, pagination.pageSize);
-        fetchStatistics(); // 刷新统计信息
+        fetchStatistics();
       } else {
         message.error(res.data.msg || '操作失败');
       }
@@ -321,10 +321,24 @@ const handleReset = () => {
       ),
     },
     {
+      title: '营业执照信息',
+      key: 'license_info',
+      width: 200,
+      render: (_: any, record: MerchantAuditRecord) => (
+        <Space direction="vertical" size={2}>
+          <Text strong style={{ fontSize: 13 }}>信用代码: {record.license_no || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>发证机关: {record.issuing_authority || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            有效期: {record.establish_date ? dayjs(record.establish_date).format('YYYY-MM-DD') : '-'} 至 {record.valid_until ? dayjs(record.valid_until).format('YYYY-MM-DD') : '-'}
+          </Text>
+        </Space>
+      ),
+    },
+    {
       title: '申请理由',
       dataIndex: 'apply_reason',
       key: 'apply_reason',
-      width: 220,
+      width: 150,
       ellipsis: {
         showTitle: false,
       },
@@ -335,71 +349,57 @@ const handleReset = () => {
       ),
     },
     {
-    title: '营业执照',
-    dataIndex: 'license_image_url',
-    key: 'license_image_url',
-    width: 100,
-    render: (url: string) => (
+      title: '营业执照',
+      dataIndex: 'license_image_url',
+      key: 'license_image_url',
+      width: 80,
+      render: (url: string) => (
         url ? (
-        <div style={{ position: 'relative' }}>
-            <Image 
+          <Image 
             src={url.startsWith('http') ? url : `http://localhost:3000${url}`} 
-            width={50} 
-            height={50}
+            width={40} 
+            height={40}
             style={{ 
-                borderRadius: 6, 
-                objectFit: 'cover',
-                border: '1px solid #f0f0f0'
+              borderRadius: 4, 
+              objectFit: 'cover',
+              border: '1px solid #f0f0f0',
+              cursor: 'pointer'
             }}
-            fallback="/images/fallback.png"
             preview={{
-                mask: <EyeOutlined />,
-                src: url.startsWith('http') ? url : `http://localhost:3000${url}`
+              mask: <EyeOutlined />,
+              src: url.startsWith('http') ? url : `http://localhost:3000${url}`
             }}
-            />
-        </div>
+          />
         ) : (
-        <Tag color="default">未上传</Tag>
+          <Tag color="default">未上传</Tag>
         )
-    ),
+      ),
     },
     {
-    title: '申请时间',
-    dataIndex: 'apply_created_at', 
-    key: 'apply_created_at',
-    width: 160,
-    render: (text: string, record: MerchantAuditRecord) => {
-      // 使用 apply_created_at，如果不存在则回退到 created_at
-      const dateStr = text || record.created_at;
-      return (
-        <span style={{ color: '#8c8c8c', fontSize: 13 }}>
-          {dateStr ? new Date(dateStr).toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          }) : '-'}
-        </span>
-      );
+      title: '申请时间',
+      dataIndex: 'apply_created_at', 
+      key: 'apply_created_at',
+      width: 140,
+      render: (text: string, record: MerchantAuditRecord) => {
+        const dateStr = text || record.created_at;
+        return (
+          <span style={{ color: '#8c8c8c', fontSize: 12 }}>
+            {dateStr ? dayjs(dateStr).format('YYYY-MM-DD HH:mm') : '-'}
+          </span>
+        );
+      },
     },
-     sorter: (a: MerchantAuditRecord, b: MerchantAuditRecord) => {
-      const aDate = a.apply_created_at || a.created_at || '0';
-      const bDate = b.apply_created_at || b.created_at || '0';
-      return new Date(aDate).getTime() - new Date(bDate).getTime();
-    },
-  },
     {
       title: '审核状态',
       dataIndex: 'audit_status',
       key: 'audit_status',
-      width: 120,
+      width: 100,
       render: (status: string) => renderStatusTag(status),
     },
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 100,
       fixed: 'right' as const,
       render: (_: any, record: MerchantAuditRecord) => (
         <Button 
@@ -425,9 +425,14 @@ const handleReset = () => {
     },
   ];
 
-const todayPending = statistics.today_pending;
+  const todayPending = statistics.today_pending;
+  const pendingCount = statistics.merchant.pending;
 
-const pendingCount = statistics.merchant.pending;
+  // 检查资质是否过期
+  const isLicenseExpired = (validUntil?: string) => {
+    if (!validUntil) return false;
+    return dayjs(validUntil).isBefore(dayjs());
+  };
 
   return (
     <div style={{ 
@@ -493,33 +498,30 @@ const pendingCount = statistics.merchant.pending;
                 prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
                 value={filters.keyword}
                 onChange={(e) => {
-                    const value = e.target.value;
-                    // 更新UI状态
-                    setFilters(prev => ({ ...prev, keyword: value }));
-                    // 防抖搜索，传递最新的keyword
-                    debouncedSearch(value);
+                  const value = e.target.value;
+                  setFilters(prev => ({ ...prev, keyword: value }));
+                  debouncedSearch(value);
                 }}
                 onPressEnter={() => {
-                    setPagination(prev => ({ ...prev, current: 1 }));
-                    // 直接使用当前的filters状态
-                    fetchAuditList(1, pagination.pageSize, filters);
+                  setPagination(prev => ({ ...prev, current: 1 }));
+                  fetchAuditList(1, pagination.pageSize, filters);
                 }}
-                />
+              />
             </Form.Item>
             <Form.Item label="审核状态" style={{ marginBottom: 0 }}>
               <Select 
                 value={filters.status} 
                 style={{ width: 140, borderRadius: 8 }}
                 onChange={(value) => {
-                    setFilters(prev => ({ ...prev, status: value }));
-                     fetchAuditList(1, pagination.pageSize, { status: value });
+                  setFilters(prev => ({ ...prev, status: value }));
+                  fetchAuditList(1, pagination.pageSize, { status: value });
                 }}
-                >
+              >
                 <Option value="all">全部</Option>
                 <Option value="pending">待审核</Option>
                 <Option value="approved">已通过</Option>
                 <Option value="rejected">已驳回</Option>
-               </Select>
+              </Select>
             </Form.Item>
             <Form.Item style={{ marginBottom: 0 }}>
               <Space>
@@ -566,7 +568,7 @@ const pendingCount = statistics.merchant.pending;
             }
           }}
           onChange={handleTableChange}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1600 }}
           rowKey="key"
           rowClassName={(record) => 
             record.audit_status === 'pending' ? 'row-pending' : ''
@@ -615,7 +617,7 @@ const pendingCount = statistics.merchant.pending;
           setRejectReason('');
           setSelectedRecord(null);
         }}
-        width={700}
+        width={800}
         footer={selectedRecord?.audit_status === 'pending' ? [
           <Button 
             key="close" 
@@ -712,18 +714,52 @@ const pendingCount = statistics.merchant.pending;
                 <Col span={12}>
                   <div style={{ fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>申请时间</div>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>
-                    {selectedRecord.created_at ? new Date(selectedRecord.created_at).toLocaleString('zh-CN') : '-'}
+                    {selectedRecord.created_at ? dayjs(selectedRecord.created_at).format('YYYY-MM-DD HH:mm') : '-'}
                   </div>
                 </Col>
                 <Col span={12}>
                   <div style={{ fontSize: 13, color: '#8c8c8c', marginBottom: 4 }}>注册时间</div>
                   <div style={{ fontSize: 14, fontWeight: 500 }}>
                     {selectedRecord.registered_at 
-                      ? new Date(selectedRecord.registered_at).toLocaleString('zh-CN')
+                      ? dayjs(selectedRecord.registered_at).format('YYYY-MM-DD HH:mm')
                       : '-'}
                   </div>
                 </Col>
               </Row>
+            </Card>
+
+            {/* 营业执照信息卡片 */}
+            <Card 
+              size="small" 
+              title={
+                <Space>
+                  <IdcardOutlined style={{ color: '#1890ff' }} />
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>营业执照信息</span>
+                </Space>
+              }
+              style={{ marginBottom: 24, borderRadius: 12 }}
+              headStyle={{ borderBottom: '1px solid #f0f0f0', padding: '12px 20px' }}
+              bodyStyle={{ padding: '16px 20px' }}
+            >
+              <Descriptions bordered column={2} size="small">
+                <Descriptions.Item label="统一社会信用代码" span={2}>
+                  <Text copyable>{selectedRecord.license_no || '-'}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="发证机关" span={2}>
+                  {selectedRecord.issuing_authority || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="成立日期">
+                  {selectedRecord.establish_date ? dayjs(selectedRecord.establish_date).format('YYYY-MM-DD') : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="有效期限">
+                  <Space>
+                    {selectedRecord.valid_until ? dayjs(selectedRecord.valid_until).format('YYYY-MM-DD') : '-'}
+                    {selectedRecord.valid_until && isLicenseExpired(selectedRecord.valid_until) && (
+                      <Tag color="red" icon={<WarningOutlined />}>已过期</Tag>
+                    )}
+                  </Space>
+                </Descriptions.Item>
+              </Descriptions>
             </Card>
 
             {/* 申请理由 */}
@@ -752,13 +788,13 @@ const pendingCount = statistics.merchant.pending;
               </div>
             </Card>
 
-            {/* 营业执照 */}
+            {/* 营业执照图片 */}
             <Card 
               size="small" 
               title={
                 <Space>
                   <FileImageOutlined style={{ color: '#1890ff' }} />
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>营业执照</span>
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>营业执照图片</span>
                 </Space>
               }
               style={{ marginBottom: 24, borderRadius: 12 }}
@@ -767,18 +803,18 @@ const pendingCount = statistics.merchant.pending;
             >
               <div style={{ textAlign: 'center' }}>
                 {selectedRecord.license_image_url ? (
-                    <Image 
+                  <Image 
                     src={selectedRecord.license_image_url?.startsWith('http') 
-                        ? selectedRecord.license_image_url 
-                        : `http://localhost:3000${selectedRecord.license_image_url}`
+                      ? selectedRecord.license_image_url 
+                      : `http://localhost:3000${selectedRecord.license_image_url}`
                     } 
-                    width={280}
+                    width={400}
                     style={{ 
-                        borderRadius: 12,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                      borderRadius: 12,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
                     }}
                     fallback="/images/fallback.png"
-                    />
+                  />
                 ) : (
                   <Empty 
                     image={Empty.PRESENTED_IMAGE_SIMPLE} 

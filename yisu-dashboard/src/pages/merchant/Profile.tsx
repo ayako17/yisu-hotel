@@ -1,82 +1,62 @@
+// yisu-dashboard/src/pages/merchant/Profile.tsx
 import React, { useEffect, useState } from 'react';
 import {
-  Card, Form, Input, Button, Steps, Divider, Upload, message, Tabs,
-  Descriptions, Tag, Space, Modal, Row, Col, Statistic,
-  InputNumber, Timeline
+  Card, Tabs, Descriptions, Tag, Space, Row, Col, Statistic,
+  Timeline, Divider, Spin, Image,
+  Steps
 } from 'antd';
-import type { UploadProps } from 'antd';
 import {
-  UploadOutlined,
-  SaveOutlined,
   BankOutlined,
   FileTextOutlined,
   CheckCircleOutlined,
   WarningOutlined,
-  EditOutlined,
   ClockCircleOutlined,
-  CloseCircleOutlined  
+  CloseCircleOutlined,
+  IdcardOutlined,
+  CalendarOutlined,
+  PhoneOutlined,
+  UserOutlined,
+  EnvironmentOutlined
 } from '@ant-design/icons';
 import axios from '../../services/axios';
-import { pickAndUploadImage } from '../../utils/merchant';
+import dayjs from 'dayjs';
 
 const { TabPane } = Tabs;
-const { TextArea } = Input;
 
+// 商户资料接口
 interface MerchantProfile {
-  merchant_id: number;
+  user_id: number;
   username: string;
   phone: string;
-  email?: string;
-  company_name: string;
-  company_address?: string;
-  contact_person: string;
-  contact_phone: string;
+  avatar_url?: string;
+  account_status: string;
   
   // 资质信息
-  license_no: string;
   license_image_url?: string;
-  business_scope?: string;
-  legal_representative?: string;
-  registered_capital?: number;
-  establish_date?: string;
-  valid_until?: string;
-  
-  // 银行信息
-  bank_name?: string;
-  bank_account?: string;
-  bank_account_name?: string;
-  
-  // 状态
+  license_no?: string;        
+  issuing_authority?: string; 
+  establish_date?: string;    
+  valid_until?: string;       
   status: 'pending' | 'approved' | 'rejected';
-  reject_reason?: string;
+  apply_reason?: string;
+  rejection_reason?: string;
   created_at: string;
-  
-  // 统计数据
-  stats?: {
-    hotel_count: number;
-    order_count: number;
-    total_revenue: number;
-    pending_audit: number;
-  };
+  updated_at: string;
 }
 
 // 审核记录接口
 interface AuditRecord {
   id: number;
-  status: string;        // 'pending' | 'approved' | 'rejected'
-  remark?: string;       // 审核说明
-  reject_reason?: string; // 驳回原因（如果有）
-  created_at: string;    // 申请时间
-  operator?: string;     // 操作人
+  status: string;
+  remark?: string;
+  reject_reason?: string;
+  created_at: string;
+  operator?: string;
 }
 
 const MerchantProfile: React.FC = () => {
-  const [form] = Form.useForm();
   const [profile, setProfile] = useState<MerchantProfile | null>(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [licenseImage, setLicenseImage] = useState<string>('');
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
 
   useEffect(() => {
@@ -84,28 +64,24 @@ const MerchantProfile: React.FC = () => {
     fetchAuditRecords();
   }, []);
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get('/merchant/profile');
-      if (res.data.code === 200) {
-        const data = res.data.data;
-        setProfile(data);
-        form.setFieldsValue(data);
-        setLicenseImage(data.license_image_url || '');
-        
-        // 获取统计数据
-        const statsRes = await axios.get('/merchant/dashboard/stats');
-        if (statsRes.data.code === 200) {
-          setProfile(prev => prev ? { ...prev, stats: statsRes.data.data } : null);
-        }
-      }
-    } catch (error) {
-      message.error('获取商户资料失败');
-    } finally {
-      setLoading(false);
+const fetchProfile = async () => {
+  setLoading(true);
+  try {
+    const res = await axios.get('/merchant/profile');
+    console.log('API返回数据:', res.data);
+    
+    if (res.data.code === 200) {
+      const data = res.data.data;
+      console.log('商户状态值:', data.status); // 打印状态值
+      console.log('完整数据:', data);
+      setProfile(data);
     }
-  };
+  } catch (error) {
+    console.error('获取商户资料失败:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchAuditRecords = async () => {
     try {
@@ -118,405 +94,154 @@ const MerchantProfile: React.FC = () => {
     }
   };
 
-  const handleSave = async (values: any) => {
-    setSaving(true);
-    try {
-      const res = await axios.put('/merchant/profile', values);
-      if (res.data.code === 200) {
-        message.success('保存成功');
-        setEditMode(false);
-        fetchProfile();
-      }
-    } catch (error) {
-      message.error('保存失败');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleUploadLicense = async () => {
-    try {
-      const url = await pickAndUploadImage();
-      setLicenseImage(url);
-      form.setFieldValue('license_image_url', url);
-      message.success('上传成功');
-    } catch (error) {
-      // 错误已在 pickAndUploadImage 中处理
-    }
-  };
-
   const getStatusTag = () => {
     if (!profile) return null;
     
     const statusMap = {
-      'pending': { color: 'orange', icon: <WarningOutlined />, text: '审核中' },
+      'pending': { color: 'orange', icon: <ClockCircleOutlined />, text: '审核中' },
       'approved': { color: 'green', icon: <CheckCircleOutlined />, text: '已认证' },
       'rejected': { color: 'red', icon: <WarningOutlined />, text: '已驳回' }
     };
     
     const status = statusMap[profile.status];
     return (
-      <Tag color={status.color} icon={status.icon} style={{ padding: '4px 8px' }}>
+      <Tag color={status.color} icon={status.icon} style={{ padding: '4px 12px', borderRadius: 20 }}>
         {status.text}
       </Tag>
     );
   };
 
+  // 格式化日期显示
+  const formatDate = (date?: string) => {
+    if (!date) return '-';
+    return dayjs(date).format('YYYY-MM-DD');
+  };
+
   if (loading && !profile) {
     return (
-      <Card loading={true}>
-        <div style={{ textAlign: 'center', padding: 50 }}>加载中...</div>
-      </Card>
+      <div style={{ textAlign: 'center', padding: 100 }}>
+        <Spin size="large" tip="加载中..." />
+      </div>
     );
   }
 
   return (
-    <div>
-      {/* 统计卡片 */}
-      {profile?.stats && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={6}>
-            <Card hoverable>
-              <Statistic 
-                title="我的酒店" 
-                value={profile.stats.hotel_count} 
-                prefix={<BankOutlined />}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card hoverable>
-              <Statistic 
-                title="累计订单" 
-                value={profile.stats.order_count} 
-                prefix={<FileTextOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card hoverable>
-              <Statistic 
-                title="总收入" 
-                value={profile.stats.total_revenue} 
-                prefix="¥"
-                precision={2}
-                valueStyle={{ color: '#fa8c16' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card hoverable>
-              <Statistic 
-                title="待审核" 
-                value={profile.stats.pending_audit} 
-                valueStyle={{ color: '#fa8c16' }}
-              />
-            </Card>
-          </Col>
-        </Row>
-      )}
-
+    <div style={{ padding: 24 }}>
       <Card
+        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
         title={
-          <Space>
-            <span>商户资料</span>
+          <Space size="middle">
+            <div style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: 20, 
+              background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <IdcardOutlined style={{ color: 'white', fontSize: 20 }} />
+            </div>
+            <span style={{ fontSize: 20, fontWeight: 600 }}>商户资料</span>
             {getStatusTag()}
           </Space>
         }
-        extra={
-          !editMode ? (
-            <Button 
-              type="primary" 
-              icon={<EditOutlined />}
-              onClick={() => setEditMode(true)}
-            >
-              编辑资料
-            </Button>
-          ) : (
-            <Space>
-              <Button onClick={() => setEditMode(false)}>取消</Button>
-              <Button 
-                type="primary" 
-                icon={<SaveOutlined />}
-                onClick={() => form.submit()}
-                loading={saving}
-              >
-                保存
-              </Button>
-            </Space>
-          )
-        }
       >
-        {profile?.status === 'rejected' && profile.reject_reason && (
+        {profile?.status === 'rejected' && profile.rejection_reason && (
           <Card 
             size="small" 
             style={{ 
-              marginBottom: 16, 
+              marginBottom: 24, 
               backgroundColor: '#fff2f0', 
-              borderColor: '#ffccc7' 
+              borderColor: '#ffccc7',
+              borderRadius: 8
             }}
           >
             <Space>
               <WarningOutlined style={{ color: '#ff4d4f' }} />
               <span style={{ color: '#ff4d4f', fontWeight: 500 }}>驳回原因：</span>
-              <span>{profile.reject_reason}</span>
+              <span>{profile.rejection_reason}</span>
             </Space>
           </Card>
         )}
 
-        <Tabs defaultActiveKey="basic">
+        <Tabs defaultActiveKey="basic" style={{ marginTop: 8 }}>
+          {/* 基本信息 Tab */}
           <TabPane tab="基本信息" key="basic">
-            {editMode ? (
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSave}
-                initialValues={profile || {}}
-              >
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="company_name"
-                      label="公司/商户名称"
-                      rules={[{ required: true, message: '请输入公司名称' }]}
-                    >
-                      <Input placeholder="与营业执照一致" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="company_address" label="公司地址">
-                      <Input placeholder="公司注册地址" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="contact_person"
-                      label="联系人"
-                      rules={[{ required: true }]}
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="contact_phone"
-                      label="联系电话"
-                      rules={[{ required: true }]}
-                    >
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item name="email" label="电子邮箱">
-                      <Input type="email" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="phone" label="登录手机号">
-                      <Input disabled />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Form>
-            ) : (
-              <Descriptions bordered column={2}>
-                <Descriptions.Item label="公司名称" span={2}>
-                  {profile?.company_name}
-                </Descriptions.Item>
-                <Descriptions.Item label="公司地址" span={2}>
-                  {profile?.company_address || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="联系人">{profile?.contact_person}</Descriptions.Item>
-                <Descriptions.Item label="联系电话">{profile?.contact_phone}</Descriptions.Item>
-                <Descriptions.Item label="电子邮箱">{profile?.email || '-'}</Descriptions.Item>
-                <Descriptions.Item label="登录手机号">{profile?.phone}</Descriptions.Item>
-              </Descriptions>
-            )}
+            <Descriptions bordered column={2} style={{ background: '#fff' }}>
+              <Descriptions.Item label="商户名称" span={2}>
+                <Space>
+                  <UserOutlined />
+                  {profile?.username || '-'}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="手机号">
+                <Space>
+                  <PhoneOutlined />
+                  {profile?.phone || '-'}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="账号状态">
+                <Tag color={profile?.account_status === 'active' ? 'green' : 'red'}>
+                  {profile?.account_status === 'active' ? '正常' : '已封禁'}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="注册时间" span={2}>
+                {formatDate(profile?.created_at)}
+              </Descriptions.Item>
+              <Descriptions.Item label="最后更新" span={2}>
+                {formatDate(profile?.updated_at)}
+              </Descriptions.Item>
+            </Descriptions>
           </TabPane>
 
+          {/* 资质认证 Tab */}
           <TabPane tab="资质认证" key="license">
-            {editMode ? (
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSave}
-              >
-                <Form.Item name="license_image_url" label="营业执照">
-                  <div>
-                    {licenseImage ? (
-                      <div style={{ marginBottom: 16 }}>
-                        <img 
-                          src={licenseImage} 
-                          alt="营业执照" 
-                          style={{ maxWidth: '100%', maxHeight: 200 }} 
-                        />
-                      </div>
-                    ) : null}
-                    <Button 
-                      icon={<UploadOutlined />} 
-                      onClick={handleUploadLicense}
-                    >
-                      {licenseImage ? '重新上传' : '上传营业执照'}
-                    </Button>
-                    <span style={{ marginLeft: 16, color: '#999' }}>
-                      支持 JPG/PNG，不超过5MB
-                    </span>
-                  </div>
-                </Form.Item>
-
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item
-                      name="license_no"
-                      label="统一社会信用代码"
-                      rules={[{ required: true }]}
-                    >
-                      <Input placeholder="18位信用代码" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="legal_representative" label="法定代表人">
-                      <Input />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item name="registered_capital" label="注册资本(万元)">
-                      <InputNumber style={{ width: '100%' }} min={0} />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="business_scope" label="经营范围">
-                      <TextArea rows={3} />
-                    </Form.Item>
-                  </Col>
-                </Row>
-
-                <Row gutter={24}>
-                  <Col span={12}>
-                    <Form.Item name="establish_date" label="成立日期">
-                      <Input type="date" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item name="valid_until" label="有效期限">
-                      <Input type="date" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Form>
-            ) : (
-              <Descriptions bordered column={2}>
-                <Descriptions.Item label="营业执照" span={2}>
-                  {profile?.license_image_url ? (
-                    <img 
-                      src={profile.license_image_url} 
+            <Descriptions bordered column={2}>
+              <Descriptions.Item label="营业执照" span={2}>
+                {profile?.license_image_url ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <Image 
+                      src={profile.license_image_url.startsWith('http') ? profile.license_image_url : `http://localhost:3000${profile.license_image_url}`} 
                       alt="营业执照" 
-                      style={{ maxWidth: 200, maxHeight: 150 }} 
+                      width={300}
+                      style={{ borderRadius: 8 }} 
                     />
-                  ) : (
-                    '未上传'
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="统一社会信用代码" span={2}>
-                  {profile?.license_no || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="法定代表人">{profile?.legal_representative || '-'}</Descriptions.Item>
-                <Descriptions.Item label="注册资本">{profile?.registered_capital ? `${profile.registered_capital}万元` : '-'}</Descriptions.Item>
-                <Descriptions.Item label="经营范围" span={2}>
-                  {profile?.business_scope || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="成立日期">{profile?.establish_date || '-'}</Descriptions.Item>
-                <Descriptions.Item label="有效期限">{profile?.valid_until || '永久'}</Descriptions.Item>
-              </Descriptions>
-            )}
-          </TabPane>
-
-          <TabPane tab="银行信息" key="bank">
-            {editMode ? (
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSave}
-              >
-                <Row gutter={24}>
-                  <Col span={8}>
-                    <Form.Item name="bank_name" label="开户银行">
-                      <Input placeholder="如：中国建设银行" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                    <Form.Item name="bank_account_name" label="开户名称">
-                      <Input placeholder="账户名称" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                    <Form.Item name="bank_account" label="银行账号">
-                      <Input placeholder="银行账号" />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Form>
-            ) : (
-              <Descriptions bordered column={3}>
-                <Descriptions.Item label="开户银行">{profile?.bank_name || '-'}</Descriptions.Item>
-                <Descriptions.Item label="开户名称">{profile?.bank_account_name || '-'}</Descriptions.Item>
-                <Descriptions.Item label="银行账号">{profile?.bank_account || '-'}</Descriptions.Item>
-              </Descriptions>
-            )}
+                  </div>
+                ) : (
+                  <Tag color="default">未上传</Tag>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="统一社会信用代码" span={2}>
+                {profile?.license_no || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="发证机关" span={2}>
+                {profile?.issuing_authority || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="成立日期">
+                {formatDate(profile?.establish_date)}
+              </Descriptions.Item>
+              <Descriptions.Item label="有效期限">
+                {formatDate(profile?.valid_until) || '永久'}
+              </Descriptions.Item>
+              <Descriptions.Item label="申请理由" span={2}>
+                <div style={{ 
+                  background: '#f5f5f5', 
+                  padding: 12, 
+                  borderRadius: 4,
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.6
+                }}>
+                  {profile?.apply_reason || '-'}
+                </div>
+              </Descriptions.Item>
+            </Descriptions>
           </TabPane>
 
           <TabPane tab="审核记录" key="audit">
-            <Card>
-              {/* 审核状态步骤条 */}
-              {profile && (
-                <Steps
-                  current={
-                    profile.status === 'pending' ? 1 :
-                    profile.status === 'approved' ? 2 :
-                    profile.status === 'rejected' ? 2 : 0
-                  }
-                  status={profile.status === 'rejected' ? 'error' : 'process'}
-                  items={[
-                    {
-                      title: '提交申请',
-                      description: profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '-',
-                      icon: <FileTextOutlined />,
-                    },
-                    {
-                      title: '资质审核',
-                      description: profile?.status === 'pending' ? '进行中' : 
-                                  profile?.status === 'approved' ? '已完成' :
-                                  profile?.status === 'rejected' ? '已驳回' : '-',
-                      icon: profile?.status === 'approved' ? <CheckCircleOutlined /> :
-                            profile?.status === 'rejected' ? <WarningOutlined /> :
-                            <ClockCircleOutlined />,
-                    },
-                    {
-                      title: '审核完成',
-                      description: profile?.status === 'approved' ? '认证通过' :
-                                  profile?.status === 'rejected' ? '认证失败' : '-',
-                      icon: profile?.status === 'approved' ? <CheckCircleOutlined /> :
-                            profile?.status === 'rejected' ? <CloseCircleOutlined /> :
-                            <ClockCircleOutlined />,
-                    },
-                  ]}
-                  style={{ marginBottom: 24 }}
-                />
-              )}
-              
+            <Card style={{ borderRadius: 12 }}>
               {/* 审核记录时间线 */}
-              <Divider style={{ textAlign: 'left' }}>审核历史</Divider>
+              <Divider style={{ textAlign: 'left', marginTop: 0 }}>审核历史</Divider>
               
               {auditRecords.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
@@ -567,13 +292,7 @@ const MerchantProfile: React.FC = () => {
                               {statusText}
                             </span>
                             <span style={{ color: '#999', fontSize: 13 }}>
-                              {new Date(record.created_at).toLocaleString('zh-CN', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
+                              {dayjs(record.created_at).format('YYYY-MM-DD HH:mm')}
                             </span>
                           </div>
                           
@@ -586,7 +305,8 @@ const MerchantProfile: React.FC = () => {
                               marginBottom: 8,
                               fontSize: 14,
                               color: '#333',
-                              lineHeight: 1.6
+                              lineHeight: 1.6,
+                              whiteSpace: 'pre-wrap'
                             }}>
                               {record.remark}
                             </div>
