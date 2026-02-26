@@ -12,38 +12,38 @@ const Login: React.FC = () => {
     setLoading(true);
     
     try {
-      // 调用后端登录API
-      const res = await axios.post('auth/login', {
-        phone: values.phone, // 注意：使用手机号登录
+      const res = await axios.post('/auth/login', {
+        phone: values.phone,
         password: values.password
       });
       
       console.log('登录响应:', res.data);
       
       if (res.data.code === 200) {
-        message.success('登录成功，欢迎回来！');
+        const userData = res.data.data;
+        const role = userData?.role;
         
-        // 存储 Token 到 localStorage
-        if (res.data.data?.token) {
-          localStorage.setItem('token', res.data.data.token);
-          localStorage.setItem('userInfo', JSON.stringify({
-            username: res.data.data.username,
-            role: res.data.data.role,
-            phone: values.phone
-          }));
-        }
-        
-        // 根据角色跳转到不同的页面
-        const role = res.data.data?.role;
-        if (role === 'super_admin' || role === 'admin') {
-          // 管理员和超级管理员跳转到管理后台
-          navigate('/dashboard');
-        } else if (role === 'merchant') {
-          // 商户跳转到商户管理页面
-          navigate('/merchant/dashboard');
+        // 只允许商户和管理员登录
+        if (role === 'super_admin' || role === 'admin' || role === 'merchant') {
+          message.success('登录成功，欢迎回来！');
+          
+          if (userData?.token) {
+            localStorage.setItem('token', userData.token);
+            localStorage.setItem('userInfo', JSON.stringify({
+              username: userData.username,
+              role: userData.role,
+              phone: values.phone,
+              userId: userData.userId
+            }));
+          }
+          
+          if (role === 'super_admin' || role === 'admin') {
+            navigate('/dashboard');
+          } else if (role === 'merchant') {
+            navigate('/merchant/dashboard');
+          }
         } else {
-          // 普通用户跳转到用户主页
-          navigate('/user/home');
+          message.error('该账号无权限访问管理后台');
         }
       } else {
         message.error(res.data.msg || '登录失败');
@@ -51,13 +51,11 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error('登录错误:', error);
       
-      // 如果后端返回具体的错误信息
       if (error.response?.data?.msg) {
         message.error(error.response.data.msg);
       } else if (error.code === 'ERR_NETWORK') {
-        // 后端连接失败，使用演示账号作为后备
-        message.error('后端服务不可用，使用演示模式');
-        // 演示账号逻辑
+        message.error('网络连接失败，请检查后端服务');
+        // 保留商户和管理员的演示账号
         if (values.phone === '13888888888' && values.password === 'SuperAdmin@123') {
           message.success('演示模式：超级管理员登录成功！');
           localStorage.setItem('token', 'demo-token-super-admin');
@@ -76,8 +74,17 @@ const Login: React.FC = () => {
             phone: 'admin'
           }));
           navigate('/dashboard');
+        } else if (values.phone === '13800138000' && values.password === 'Merchant@123') {
+          message.success('演示模式：商户登录成功！');
+          localStorage.setItem('token', 'demo-token-merchant');
+          localStorage.setItem('userInfo', JSON.stringify({
+            username: '演示商户',
+            role: 'merchant',
+            phone: '13800138000'
+          }));
+          navigate('/merchant/dashboard');
         } else {
-          message.error('演示账号：超级管理员 13888888888 / SuperAdmin@123 或 管理员 admin / 123456');
+          message.error('演示账号：超级管理员 13888888888 / SuperAdmin@123, 管理员 admin / 123456, 商户 13800138000 / Merchant@123');
         }
       } else {
         message.error('网络连接失败或服务器错误');
@@ -101,8 +108,8 @@ const Login: React.FC = () => {
         bordered={false}
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h2 style={{ color: '#0066FF', margin: 0 }}>易宿酒店管理平台</h2>
-          <p style={{ color: '#999', marginTop: 8 }}>易于管理，宿于远方</p>
+          <h2 style={{ color: '#0066FF', margin: 0 }}>易宿管理平台</h2>
+          <p style={{ color: '#999', marginTop: 8 }}>商户/管理员登录入口</p>
         </div>
 
         <Form
@@ -111,7 +118,6 @@ const Login: React.FC = () => {
           onFinish={onFinish}
           size="large"
         >
-          {/* 修改为手机号输入 */}
           <Form.Item
             name="phone"
             rules={[{ 
@@ -170,7 +176,7 @@ const Login: React.FC = () => {
             </div>
           </Form.Item>
 
-          {/* 演示账号提示 */}
+          {/* 演示账号提示 - 只保留商户和管理员 */}
           <div style={{ 
             padding: '12px', 
             backgroundColor: '#f6ffed', 
@@ -185,6 +191,7 @@ const Login: React.FC = () => {
             </div>
             <div>超级管理员：13888888888 / SuperAdmin@123</div>
             <div>管理员：admin / 123456</div>
+            <div>商户：13800138000 / Merchant@123</div>
           </div>
         </Form>
         

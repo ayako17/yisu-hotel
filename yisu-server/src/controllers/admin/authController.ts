@@ -7,18 +7,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'yisu_secret_key';
 const JWT_EXPIRES_IN = '24h';
 
 export const register = async (req: Request, res: Response) => {
-  const { phone, password, username, role = 'user', inviteCode } = req.body;
+  const { phone, password, username, role = 'merchant', inviteCode } = req.body;
   
-  // 在外层声明applyId
   let applyId = null;
   
   try {
-    // 验证角色是否合法 - 禁止注册超级管理员
-    const allowedRoles = ['user', 'merchant', 'admin'];
+    // 验证角色是否合法 - 只允许商户和管理员注册
+    const allowedRoles = ['merchant', 'admin'];
     if (!allowedRoles.includes(role)) {
       return res.json({ 
         code: 400, 
-        msg: '无效的角色类型，超级管理员由系统初始化创建' 
+        msg: '无效的角色类型，只允许注册商户或管理员' 
       });
     }
 
@@ -77,7 +76,7 @@ export const register = async (req: Request, res: Response) => {
 
     const userId = result.insertId;
 
-    // // 6. 如果是管理员注册，标记邀请码已使用
+    // 6. 如果是管理员注册，标记邀请码已使用
     if (role === 'admin' && inviteCode) {
       await pool.execute(
         `UPDATE admin_invitations 
@@ -87,41 +86,37 @@ export const register = async (req: Request, res: Response) => {
       );
     }
 
-  // 7. 如果是商户注册，只创建商户资料，不创建审核申请
-  if (role === 'merchant') {
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      await connection.beginTransaction();
-      
-      // 只创建商户资料（状态为pending），不创建audits_apply
-      await connection.execute(
-        `INSERT INTO merchant_profiles (
-          user_id, 
-          status, 
-          created_at, 
-          updated_at
-        ) VALUES (?, 'pending', NOW(), NOW())`,
-        [userId]
-      );
-      
-      await connection.commit();
-      console.log('商户资料创建成功，等待资质上传:', userId);
-      
-      // pplyId 设为 null，等待资质上传时再创建
-      applyId = null;
-      
-    } catch (merchantError) {
-      if (connection) await connection.rollback();
-      console.error('创建商户资料失败:', merchantError);
-      // 不抛出错误，用户已创建成功
-    } finally {
-      if (connection) connection.release();
+    // 7. 如果是商户注册，创建商户资料
+    if (role === 'merchant') {
+      let connection;
+      try {
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+        
+        await connection.execute(
+          `INSERT INTO merchant_profiles (
+            user_id, 
+            status, 
+            created_at, 
+            updated_at
+          ) VALUES (?, 'pending', NOW(), NOW())`,
+          [userId]
+        );
+        
+        await connection.commit();
+        console.log('商户资料创建成功，等待资质上传:', userId);
+        
+        applyId = null;
+        
+      } catch (merchantError) {
+        if (connection) await connection.rollback();
+        console.error('创建商户资料失败:', merchantError);
+      } finally {
+        if (connection) connection.release();
+      }
     }
-  }
 
     // 8. 生成JWT Token（为商户提供token用于资质上传）
-    //添加类型注解，明确token可以是string或null
     let token: string | null = null;
     
     if (role === 'merchant') {
@@ -132,21 +127,20 @@ export const register = async (req: Request, res: Response) => {
           username: username,
           phone: phone
         },
-        JWT_SECRET,  // 使用常量
-        { expiresIn: JWT_EXPIRES_IN }  // 使用常量
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
       );
     }
 
     // 9. 返回成功响应
     const roleMessages = {
-      'user': '用户',
       'merchant': '商户',
       'admin': '管理员'
     };
 
-    const successMsg = role === 'user' 
-      ? '注册成功，请登录！'
-      : `${roleMessages[role]}注册成功${role === 'merchant' ? '，请等待审核' : '，请登录'}！`;
+    const successMsg = role === 'merchant' 
+      ? '商户注册成功，请上传资质材料'
+      : '管理员注册成功，请登录';
 
     console.log('注册成功，返回响应:', { 
       role, 
@@ -156,18 +150,16 @@ export const register = async (req: Request, res: Response) => {
       hasToken: !!token 
     });
 
-    // 根据不同角色返回不同的数据
     const responseData: any = { 
       role, 
       status: userStatus,
       user_id: userId
     };
 
-    // 商户返回额外的数据
     if (role === 'merchant') {
       responseData.apply_id = null;
-      responseData.token = token;  // 返回token供资质上传使用
-      responseData.need_qualification = true;  // 标识需要上传资质
+      responseData.token = token;
+      responseData.need_qualification = true;
     }
 
     res.json({ 
@@ -225,8 +217,8 @@ export const login = async (req: Request, res: Response) => {
         username: user.username,
         phone: user.phone
       },
-      JWT_SECRET,  // 使用常量
-      { expiresIn: JWT_EXPIRES_IN }  // 使用常量
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     // 5. 返回用户信息

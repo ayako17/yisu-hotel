@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Card, message, Select, Collapse, Alert } from 'antd';
-import { UserOutlined, LockOutlined, MobileOutlined, KeyOutlined, CrownOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, MobileOutlined, KeyOutlined, CrownOutlined, ShopOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from '../../services/axios';
 
@@ -9,91 +9,74 @@ const { Panel } = Collapse;
 
 const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [role, setRole] = useState('user');
+  const [role, setRole] = useState<'merchant' | 'admin'>('merchant');
   const [showInviteCode, setShowInviteCode] = useState(false);
   const navigate = useNavigate();
 
-const onFinish = async (values: any) => {
-  console.log('提交的表单数据:', values); 
-  setLoading(true);
-  try {
-    const requestData: any = {
-      username: values.username,
-      phone: values.phone,
-      password: values.password,
-      role: values.role
-    };
-
-    // 根据角色调用不同的接口
-    let url = '/auth/register';  // 普通用户和商户
-    if (values.role === 'admin') {
-      url = '/auth/register/admin';  // 管理员使用专用接口
-      requestData.inviteCode = values.inviteCode;
-    } else {
-      // 普通用户和商户使用通用接口
-      requestData.role = values.role;
-    }
-
-    const res = await axios.post(url, requestData);
-    
-    if (res.data.code === 200) {
-      const role = values.role as 'user' | 'merchant' | 'admin';
-      const roleMessages = {
-        'user': '用户',
-        'merchant': '商户',
-        'admin': '管理员'
+  const onFinish = async (values: any) => {
+    console.log('提交的表单数据:', values); 
+    setLoading(true);
+    try {
+      const requestData: any = {
+        username: values.username,
+        phone: values.phone,
+        password: values.password,
+        role: values.role
       };
-      
-      const successMsg = role === 'user' 
-        ? `${roleMessages[role]}注册成功，请登录！`
-        : `${roleMessages[role]}注册成功${role === 'merchant' ? '，请等待审核' : '，请登录'}！`;
 
-      // 根据不同角色执行不同的跳转逻辑
-      if (role === 'merchant') {
-        // 商户：存储token，然后跳转到资质上传页面
-        if (res.data.data?.token) {
-          localStorage.setItem('token', res.data.data.token);
-          localStorage.setItem('userInfo', JSON.stringify({
-            user_id: res.data.data.user_id,
-            username: values.username,
-            phone: values.phone,
-            role: 'merchant',
-            status: res.data.data.status
-          }));
-        }
-        
-        message.success('商户基础信息注册成功，请继续上传资质材料');
-        navigate('/merchant/qualification', {
-          state: {
-            userId: res.data.data?.user_id,
-            phone: values.phone,
-            username: values.username,
-            fromRegister: true  // 标识来自注册流程
-          }
-        });
-      } else if (role === 'admin') {
-        // 管理员：注册成功后跳转到登录页
-        message.success(successMsg);
-        navigate('/login');
-      } else {
-        // 普通用户：直接跳转到登录页
-        message.success(successMsg);
-        navigate('/login');
+      // 根据角色调用不同的接口
+      let url = '/auth/register';
+      if (values.role === 'admin') {
+        url = '/auth/register/admin';
+        requestData.inviteCode = values.inviteCode;
       }
-    } else {
-      message.error(res.data.msg || '注册失败');
-    }
-  } catch (error: any) {
-    console.error('注册错误:', error);
-    message.error(error.response?.data?.msg || error.message || '网络连接失败');
-  } finally {
-    setLoading(false);
-  }
-};
 
-  const handleRoleChange = (value: string) => {
+      const res = await axios.post(url, requestData);
+      
+      if (res.data.code === 200) {
+        const role = values.role as 'merchant' | 'admin';
+        
+        if (role === 'merchant') {
+          // 商户：存储token，然后跳转到资质上传页面
+          if (res.data.data?.token) {
+            localStorage.setItem('token', res.data.data.token);
+            localStorage.setItem('userInfo', JSON.stringify({
+              user_id: res.data.data.user_id,
+              username: values.username,
+              phone: values.phone,
+              role: 'merchant',
+              status: res.data.data.status
+            }));
+          }
+          
+          message.success('商户基础信息注册成功，请继续上传资质材料');
+          navigate('/merchant/qualification', {
+            state: {
+              userId: res.data.data?.user_id,
+              phone: values.phone,
+              username: values.username,
+              fromRegister: true
+            }
+          });
+        } else if (role === 'admin') {
+          // 管理员：注册成功后跳转到登录页
+          message.success('管理员注册成功，请登录');
+          navigate('/login');
+        }
+      } else {
+        message.error(res.data.msg || '注册失败');
+      }
+    } catch (error: any) {
+      console.error('注册错误:', error);
+      message.error(error.response?.data?.msg || error.message || '网络连接失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRoleChange = (value: 'merchant' | 'admin') => {
     setRole(value);
-    setShowInviteCode(value === 'admin'); // 只有管理员需要邀请码
+    setShowInviteCode(value === 'admin');
   };
 
   return (
@@ -106,7 +89,7 @@ const onFinish = async (values: any) => {
       background: 'linear-gradient(180deg, #0066FF 0%, #F0F2F5 100%)',
     }}>
       <Card 
-        title="用户注册" 
+        title="商户/管理员注册" 
         style={{ 
           width: 500, 
           borderRadius: 8,
@@ -118,7 +101,7 @@ const onFinish = async (values: any) => {
           onFinish={onFinish} 
           size="large" 
           layout="vertical"
-          initialValues={{ role: 'user' }}
+          initialValues={{ role: 'merchant' }}
         >
           <Form.Item 
             name="role" 
@@ -129,17 +112,10 @@ const onFinish = async (values: any) => {
               placeholder="请选择注册角色"
               onChange={handleRoleChange}
             >
-              <Option value="user">
-                <span style={{ display: 'flex', alignItems: 'center' }}>
-                  👤 普通用户
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#52c41a' }}>
-                    （直接使用）
-                  </span>
-                </span>
-              </Option>
               <Option value="merchant">
                 <span style={{ display: 'flex', alignItems: 'center' }}>
-                  🏪 商户
+                  <ShopOutlined style={{ color: '#fa8c16' }} />
+                  <span style={{ marginLeft: 6 }}>商户</span>
                   <span style={{ marginLeft: 8, fontSize: 12, color: '#fa8c16' }}>
                     （需资质审核）
                   </span>
@@ -174,12 +150,12 @@ const onFinish = async (values: any) => {
 
           <Form.Item 
             name="username" 
-            label={role === 'merchant' ? '商户名称' : '用户名'} 
-            rules={[{ required: true, message: role === 'merchant' ? '请输入商户名称！' : '请输入用户名！' }]}
+            label={role === 'merchant' ? '商户名称' : '管理员姓名'} 
+            rules={[{ required: true, message: role === 'merchant' ? '请输入商户名称！' : '请输入管理员姓名！' }]}
           >
             <Input 
               prefix={<UserOutlined />} 
-              placeholder={role === 'merchant' ? '请输入商户名称' : '请输入用户名'} 
+              placeholder={role === 'merchant' ? '请输入商户名称' : '请输入管理员姓名'} 
             />
           </Form.Item>
 
@@ -236,11 +212,10 @@ const onFinish = async (values: any) => {
             />
           </Form.Item>
 
-          {/* 角色说明折叠面板 */}
+          {/* 角色说明折叠面板 - 移除普通用户说明 */}
           <Collapse ghost style={{ marginBottom: 16 }}>
             <Panel header="各角色权限说明" key="1">
               <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                <p><strong>👤 普通用户</strong>: 浏览、预订酒店</p>
                 <p><strong>🏪 商户</strong>: 发布、管理酒店（需提交资质审核）</p>
                 <p><strong>👑 管理员</strong>: 审核商户、管理平台内容（需超级管理员的邀请码）</p>
                 <p><strong>👑 超级管理员</strong>: 系统最高权限，由系统初始化创建，负责生成管理邀请码</p>
@@ -276,7 +251,7 @@ const onFinish = async (values: any) => {
               loading={loading}
               style={{ height: 45, fontSize: 16 }}
             >
-              立即注册
+              {role === 'merchant' ? '立即注册商户' : '注册管理员'}
             </Button>
             <div style={{ 
               marginTop: 16, 
