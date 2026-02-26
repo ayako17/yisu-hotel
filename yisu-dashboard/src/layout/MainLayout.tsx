@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Button, theme, Avatar, Dropdown, Space, Badge, message } from 'antd';
+import { Layout, Menu, Button, theme, Avatar, Dropdown, Space, Badge, message, App } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   MenuFoldOutlined,
@@ -21,6 +21,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 const { Header, Sider, Content } = Layout;
 
 const MainLayout: React.FC = () => {
+  const { message: antdMessage } = App.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
   const navigate = useNavigate();
@@ -29,35 +30,65 @@ const MainLayout: React.FC = () => {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
-  // 加载用户信息并检查角色
-  useEffect(() => {
+  // 从 localStorage 加载用户信息的函数
+  const loadUserInfo = () => {
     const userStr = localStorage.getItem('userInfo');
     if (userStr) {
       try {
         const user = JSON.parse(userStr);
-        
-        // 如果是商户登录，自动跳转到商户端
-        if (user.role === 'merchant') {
-          message.info('商户请访问商户中心');
-          navigate('/merchant/dashboard');
-          return;
-        }
-        
-        // 检查权限：只有管理员和超级管理员可以访问后台
-        if (user.role !== 'admin' && user.role !== 'super_admin') {
-          message.error('您没有权限访问管理后台');
-          navigate('/login');
-          return;
-        }
-        
-        setUserInfo(user);
+        return user;
       } catch (error) {
         console.error('解析用户信息失败:', error);
-        navigate('/login');
+        return null;
       }
+    }
+    return null;
+  };
+
+  // 加载用户信息并检查角色
+  useEffect(() => {
+    const user = loadUserInfo();
+    
+    if (user) {
+      // 如果是商户登录，自动跳转到商户端
+      if (user.role === 'merchant') {
+        antdMessage.info('商户请访问商户中心');
+        navigate('/merchant/dashboard');
+        return;
+      }
+      
+      // 检查权限：只有管理员和超级管理员可以访问后台
+      if (user.role !== 'admin' && user.role !== 'super_admin') {
+        antdMessage.error('您没有权限访问管理后台');
+        navigate('/login');
+        return;
+      }
+      
+      setUserInfo(user);
     } else {
       navigate('/login');
     }
+
+    // 监听 storage 事件（当其他标签页修改 localStorage 时）
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'userInfo') {
+        const newUser = e.newValue ? JSON.parse(e.newValue) : null;
+        setUserInfo(newUser);
+      }
+    };
+
+    // 监听自定义事件（当本页修改用户信息时）
+    const handleUserInfoUpdated = (e: CustomEvent) => {
+      setUserInfo(e.detail);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userInfoUpdated', handleUserInfoUpdated as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userInfoUpdated', handleUserInfoUpdated as EventListener);
+    };
   }, []);
 
   // 菜单配置项 - 根据用户角色动态生成
@@ -88,13 +119,12 @@ const MainLayout: React.FC = () => {
       { key: '/finance', icon: <BarChartOutlined />, label: '财务统计' },
     ] : [];
 
-// 广告管理菜单 - 只保留生效广告
+    // 广告管理菜单 - 只保留生效广告
     const adManagementItems = isAdmin ? [
       {
         key: '/ads-management',
         icon: <RiseOutlined />,
         label: '广告管理',
-        // 直接作为单个菜单项，没有子菜单
       },
     ] : [];
 
@@ -128,7 +158,7 @@ const MainLayout: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
-    message.success('已退出登录');
+    antdMessage.success('已退出登录');
     navigate('/login');
   };
 
@@ -270,7 +300,7 @@ const MainLayout: React.FC = () => {
                     fontWeight: 'bold'
                   }}
                 >
-                  {userInfo?.username?.charAt(0) || 'U'}
+                  {userInfo?.username?.charAt(0)?.toUpperCase() || 'U'}
                 </Avatar>
                 <div style={{ 
                   display: 'flex', 

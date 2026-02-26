@@ -7,6 +7,20 @@ interface JwtPayload {
   role: string;
 }
 
+// 扩展 Express Request 类型
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        userId: number;
+        user_id: number;  // 添加 user_id 字段以兼容旧代码
+        phone: string;
+        role: string;
+      };
+    }
+  }
+}
+
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -20,8 +34,12 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
       return res.status(403).json({ code: 403, msg: '令牌无效或已过期' });
     }
 
+    const userId = decoded.userId || decoded.user_id;
+    
+    // 同时提供 userId 和 user_id 以兼容旧代码
     req.user = {
-      user_id: decoded.userId,
+      userId: userId,
+      user_id: userId,  // 添加 user_id 字段
       phone: decoded.phone,
       role: decoded.role
     };

@@ -38,8 +38,9 @@ export const getHotelAuditList = async (req: Request, res: Response) => {
         h.name_zh LIKE ? 
         OR u.username LIKE ?
         OR JSON_UNQUOTE(JSON_EXTRACT(aa.change_data, '$.name_zh')) LIKE ?
+        OR JSON_UNQUOTE(JSON_EXTRACT(aa.change_data, '$.new.name_zh')) LIKE ?
       )`;
-      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+      params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
     
     sql += ' ORDER BY aa.created_at DESC';
@@ -52,10 +53,14 @@ export const getHotelAuditList = async (req: Request, res: Response) => {
         ? JSON.parse(row.change_data) 
         : row.change_data;
       
-      // 如果是新店申请，从change_data获取酒店名称
+      // 获取酒店名称（兼容新店入驻和信息修改）
       let hotelName = row.hotel_name;
-      if (row.target_type === 'hotel_apply' && !hotelName) {
-        hotelName = changeData?.name_zh || '新酒店申请';
+      if (!hotelName) {
+        if (row.target_type === 'hotel_apply') {
+          hotelName = changeData?.name_zh || '新酒店申请';
+        } else if (row.target_type === 'hotel_update') {
+          hotelName = changeData?.new?.name_zh || '酒店信息修改';
+        }
       }
       
       return {
@@ -69,7 +74,8 @@ export const getHotelAuditList = async (req: Request, res: Response) => {
         change_data: changeData,
         apply_reason: row.apply_reason || '',
         audit_status: row.audit_status,
-        created_at: row.created_at
+        created_at: row.created_at,
+        hotel_status: row.hotel_status
       };
     });
     
@@ -122,13 +128,12 @@ export const approveHotelAudit = async (req: Request, res: Response) => {
       return null;
     };
     
-    const openingDate = formatDate(changeData.opening_date);
-    
     if (apply.target_type === 'hotel_apply') {
-      // 新店入驻：更新已有酒店的状态，而不是创建新酒店
+      // 新店入驻：从change_data获取完整数据更新hotels表
+      const openingDate = formatDate(changeData.opening_date);
+      
       await conn.query(
         `UPDATE hotels SET 
-          status = ?,
           name_zh = ?,
           name_en = ?,
           phone = ?,
@@ -136,58 +141,97 @@ export const approveHotelAudit = async (req: Request, res: Response) => {
           province = ?,
           city = ?,
           address = ?,
-          opening_date = ?
+          latitude = ?,
+          longitude = ?,
+          description = ?,
+          opening_date = ?,
+          status = ?
         WHERE hotel_id = ?`,
         [
-          'approved',  // 状态改为已上线
           changeData.name_zh || '新酒店',
           changeData.name_en || null,
           changeData.phone || '',
           changeData.star_rating || 3,
-          changeData.province || '',
-          changeData.city || '',
+          changeData.province || null,
+          changeData.city || null,
           changeData.address || '',
+          changeData.latitude || null,
+          changeData.longitude || null,
+          changeData.description || null,
           openingDate,
-          apply.target_id  // 使用原有的 hotel_id
+          'approved',  // 状态改为已上线
+          apply.target_id
         ]
       );
       
     } else if (apply.target_type === 'hotel_update') {
-      // 信息修改：更新酒店信息
-      await conn.query(
-        `UPDATE hotels SET 
-          name_zh = COALESCE(?, name_zh),
-          name_en = COALESCE(?, name_en),
-          phone = COALESCE(?, phone),
-          star_rating = COALESCE(?, star_rating),
-          province = COALESCE(?, province),
-          city = COALESCE(?, city),
-          address = COALESCE(?, address),
-          description = COALESCE(?, description),
-          latitude = COALESCE(?, latitude),
-          longitude = COALESCE(?, longitude),
-          opening_date = COALESCE(?, opening_date),
-          status = ?
-        WHERE hotel_id = ?`,
-        [
-          changeData.name_zh || null,
-          changeData.name_en || null,
-          changeData.phone || null,
-          changeData.star_rating || null,
-          changeData.province || null,
-          changeData.city || null,
-          changeData.address || null,
-          changeData.description || null,
-          changeData.latitude || null,
-          changeData.longitude || null,
-          openingDate,
-          'approved',
-          apply.target_id
-        ]
-      );
+      // 信息修改：只更新有变化的字段
+      const newData = changeData.new || {};
+      const updateFields: string[] = [];
+      const updateValues: any[] = [];
+      
+      // 动态构建更新语句
+      if (newData.name_zh !== undefined) {
+        updateFields.push('name_zh = ?');
+        updateValues.push(newData.name_zh);
+      }
+      if (newData.name_en !== undefined) {
+        updateFields.push('name_en = ?');
+        updateValues.push(newData.name_en);
+      }
+      if (newData.phone !== undefined) {
+        updateFields.push('phone = ?');
+        updateValues.push(newData.phone);
+      }
+      if (newData.star_rating !== undefined) {
+        updateFields.push('star_rating = ?');
+        updateValues.push(newData.star_rating);
+      }
+      if (newData.province !== undefined) {
+        updateFields.push('province = ?');
+        updateValues.push(newData.province);
+      }
+      if (newData.city !== undefined) {
+        updateFields.push('city = ?');
+        updateValues.push(newData.city);
+      }
+      if (newData.address !== undefined) {
+        updateFields.push('address = ?');
+        updateValues.push(newData.address);
+      }
+      if (newData.latitude !== undefined) {
+        updateFields.push('latitude = ?');
+        updateValues.push(newData.latitude);
+      }
+      if (newData.longitude !== undefined) {
+        updateFields.push('longitude = ?');
+        updateValues.push(newData.longitude);
+      }
+      if (newData.description !== undefined) {
+        updateFields.push('description = ?');
+        updateValues.push(newData.description);
+      }
+      if (newData.opening_date !== undefined) {
+        updateFields.push('opening_date = ?');
+        updateValues.push(formatDate(newData.opening_date));
+      }
+      
+      // 添加状态更新
+      updateFields.push('status = ?');
+      updateValues.push('approved');
+      
+      // 添加 hotel_id 条件
+      updateValues.push(apply.target_id);
+      
+      if (updateFields.length > 0) {
+        await conn.query(
+          `UPDATE hotels SET ${updateFields.join(', ')} WHERE hotel_id = ?`,
+          updateValues
+        );
+      }
     }
     
-    // 更新审核状态为已完成
+    // 更新审核状态为 completed
     await conn.query(
       'UPDATE audits_apply SET audit_status = ? WHERE apply_id = ?',
       ['completed', apply_id]
@@ -243,20 +287,17 @@ export const rejectHotelAudit = async (req: Request, res: Response) => {
     
     const apply = applyRows[0];
     
-    // 更新审核状态为已完成
+    // 更新审核状态为 completed
     await conn.query(
       'UPDATE audits_apply SET audit_status = ? WHERE apply_id = ?',
       ['completed', apply_id]
     );
     
-    // 根据审核类型更新相关表的状态
-    if (apply.target_type === 'hotel_apply' || apply.target_type === 'hotel_update') {
-      // 更新酒店状态为 rejected
-      await conn.query(
-        'UPDATE hotels SET status = ? WHERE hotel_id = ?',
-        ['rejected', apply.target_id]
-      );
-    }
+    // 更新酒店状态为 rejected
+    await conn.query(
+      'UPDATE hotels SET status = ? WHERE hotel_id = ?',
+      ['rejected', apply.target_id]
+    );
     
     // 记录审核日志
     await conn.query(
