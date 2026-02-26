@@ -41,10 +41,9 @@ import dayjs from 'dayjs';
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
 
-// 待办任务类型
 interface PendingTask {
   id: number;
-  type: 'merchant_audit' | 'hotel_audit' | 'ad_audit';
+  type: 'merchant_audit' | 'hotel_audit' | 'hotel_apply' | 'hotel_update' | 'ad_audit';
   title: string;
   subtitle: string;
   count: number;
@@ -109,7 +108,10 @@ const Dashboard: React.FC = () => {
     // 财务统计
     totalRevenue: 0,
     totalCommission: 0,
-    adRevenue: 0
+    adRevenue: 0,
+
+     hotelApplyPending: 0,   // 新店入驻待审核
+    hotelUpdatePending: 0,  // 信息修改待审核
   });
   
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
@@ -128,11 +130,11 @@ const Dashboard: React.FC = () => {
     },
     {
       key: 'hotel_audit',
-      title: '酒店上线审核',
+      title: '酒店审核',  // 改为通用名称
       icon: <HomeOutlined />,
       url: '/audit/hotels',
       color: '#1890ff',
-      description: '审核新酒店申请'
+      description: '审核酒店申请'
     },
     {
       key: 'ad_audit',
@@ -168,173 +170,209 @@ const Dashboard: React.FC = () => {
     }
   ];
 
-  // 获取所有统计数据
-  const fetchDashboardData = async () => {
-    setLoading(true);
+// 获取所有统计数据
+const fetchDashboardData = async () => {
+  setLoading(true);
+  try {
+    // 并行请求各个模块的数据
+    const [
+      merchantRes,
+      hotelAuditRes,  // 改为获取酒店审核列表，而不是酒店列表
+      adAuditRes,
+      activeAdsRes,
+      commissionRes,
+      ordersRes
+    ] = await Promise.allSettled([
+      axios.get('/audit/merchant-applies', { params: { status: 'pending' } }),
+      axios.get('/audit/hotels', { params: { status: 'pending' } }), // 获取待审核的酒店申请
+      axios.get('/admin/ads/orders', { params: { status: 'pending' } }),
+      axios.get('/admin/active-ads'),
+      axios.get('/admin/commission/stats', { params: { days: 30 } }),
+      axios.get('/admin/orders', { params: { pageSize: 5 } })
+    ]);
+
+    // 处理商户审核数据
+    if (merchantRes.status === 'fulfilled' && merchantRes.value.data.code === 200) {
+      const data = merchantRes.value.data.data || [];
+      setStats(prev => ({
+        ...prev,
+        merchantPending: data.length || 0
+      }));
+    }
+
+    // 处理酒店审核数据 - 统计所有待审核的酒店申请（包括新店入驻和信息修改）
+    if (hotelAuditRes.status === 'fulfilled' && hotelAuditRes.value.data.code === 200) {
+      const data = hotelAuditRes.value.data.data || [];
+      // 只统计待审核的记录
+      const pendingHotels = data.filter((item: any) => item.audit_status === 'pending');
+      
+      // 分别统计新店入驻和信息修改
+      const hotelApplyPending = pendingHotels.filter((item: any) => item.target_type === 'hotel_apply').length;
+      const hotelUpdatePending = pendingHotels.filter((item: any) => item.target_type === 'hotel_update').length;
+      
+      setStats(prev => ({
+        ...prev,
+        hotelApplyPending,      // 新店入驻待审核数量
+        hotelUpdatePending,     // 信息修改待审核数量
+        hotelPending: pendingHotels.length  // 总数（保持兼容）
+      }));
+    }
+
+    // 处理广告审核数据
+    if (adAuditRes.status === 'fulfilled' && adAuditRes.value.data.code === 200) {
+      const data = adAuditRes.value.data.data || [];
+      setStats(prev => ({
+        ...prev,
+        adPending: data.length || 0
+      }));
+    }
+
+    // 处理生效广告数据
+    if (activeAdsRes.status === 'fulfilled' && activeAdsRes.value.data.code === 200) {
+      const ads = activeAdsRes.value.data.data || [];
+      const now = dayjs();
+      const active = ads.filter((ad: any) => 
+        ad.is_active && 
+        dayjs(ad.end_date).isAfter(now) && 
+        dayjs(ad.start_date).isBefore(now)
+      );
+      const expiring = ads.filter((ad: any) => {
+        const days = dayjs(ad.end_date).diff(now, 'day');
+        return days <= 3 && days >= 0;
+      });
+      
+      setStats(prev => ({
+        ...prev,
+        adActive: active.length,
+        adExpiring: expiring.length
+      }));
+      
+      setExpiringAds(expiring.map((ad: any) => ({
+        ad_id: ad.ad_id,
+        hotel_name: ad.hotel_name,
+        end_date: ad.end_date,
+        remaining_days: dayjs(ad.end_date).diff(now, 'day')
+      })));
+    }
+
+    // 处理财务数据 - 从commission/stats获取订单数据
+    if (commissionRes.status === 'fulfilled' && commissionRes.value.data.code === 200) {
+      const data = commissionRes.value.data.data || [];
+      const totalRevenue = data.reduce((sum: number, item: any) => sum + (item.total_income || 0), 0);
+      const totalCommission = data.reduce((sum: number, item: any) => sum + (item.commission_income || 0), 0);
+      const adRevenue = data.reduce((sum: number, item: any) => sum + (item.ad_income || 0), 0);
+      
+      // 计算今日订单数（从最近7天的数据中取今天）
+      const today = dayjs().format('YYYY-MM-DD');
+      const todayStats = data.find((item: any) => dayjs(item.stat_date).format('YYYY-MM-DD') === today);
+      
+      setStats(prev => ({
+        ...prev,
+        totalRevenue,
+        totalCommission,
+        adRevenue,
+        orderToday: todayStats?.order_count || 0,
+        orderCompleted: data.reduce((sum: number, item: any) => sum + (item.order_count || 0), 0)
+      }));
+    }
+
+    // 处理订单列表数据
+    if (ordersRes.status === 'fulfilled' && ordersRes.value.data.code === 200) {
+      setRecentOrders(ordersRes.value.data.data || []);
+    }
+
+    // 同时也获取酒店总数用于活跃酒店统计（可选）
     try {
-      // 并行请求各个模块的数据
-      const [
-        merchantRes,
-        hotelRes,
-        adAuditRes,
-        activeAdsRes,
-        commissionRes,
-        ordersRes
-      ] = await Promise.allSettled([
-        axios.get('/audit/merchant-applies', { params: { status: 'pending' } }),
-        axios.get('/admin/hotels', { params: { pageSize: 100 } }),
-        axios.get('/admin/ads/orders', { params: { status: 'pending' } }),
-        axios.get('/admin/active-ads'),
-        axios.get('/admin/commission/stats', { params: { days: 30 } }),
-        axios.get('/admin/orders', { params: { pageSize: 5 } })
-      ]);
-
-      // 处理商户审核数据
-      if (merchantRes.status === 'fulfilled' && merchantRes.value.data.code === 200) {
-        const data = merchantRes.value.data.data || [];
-        setStats(prev => ({
-          ...prev,
-          merchantPending: data.length || 0
-        }));
-      }
-
-      // 处理酒店数据
-      if (hotelRes.status === 'fulfilled' && hotelRes.value.data.code === 200) {
-        const data = hotelRes.value.data.data || [];
+      const hotelRes = await axios.get('/admin/hotels', { params: { pageSize: 100 } });
+      if (hotelRes.data.code === 200) {
+        const data = hotelRes.data.data || [];
         const active = data.filter((h: any) => h.status === 'approved').length;
         const offline = data.filter((h: any) => h.status === 'offline').length;
-        const pending = data.filter((h: any) => h.status === 'pending').length;
         
         setStats(prev => ({
           ...prev,
           hotelTotal: data.length,
           hotelActive: active,
-          hotelOffline: offline,
-          hotelPending: pending
+          hotelOffline: offline
         }));
       }
-
-      // 处理广告审核数据
-      if (adAuditRes.status === 'fulfilled' && adAuditRes.value.data.code === 200) {
-        const data = adAuditRes.value.data.data || [];
-        setStats(prev => ({
-          ...prev,
-          adPending: data.length || 0
-        }));
-      }
-
-      // 处理生效广告数据
-      if (activeAdsRes.status === 'fulfilled' && activeAdsRes.value.data.code === 200) {
-        const ads = activeAdsRes.value.data.data || [];
-        const now = dayjs();
-        const active = ads.filter((ad: any) => 
-          ad.is_active && 
-          dayjs(ad.end_date).isAfter(now) && 
-          dayjs(ad.start_date).isBefore(now)
-        );
-        const expiring = ads.filter((ad: any) => {
-          const days = dayjs(ad.end_date).diff(now, 'day');
-          return days <= 3 && days >= 0;
-        });
-        
-        setStats(prev => ({
-          ...prev,
-          adActive: active.length,
-          adExpiring: expiring.length
-        }));
-        
-        setExpiringAds(expiring.map((ad: any) => ({
-          ad_id: ad.ad_id,
-          hotel_name: ad.hotel_name,
-          end_date: ad.end_date,
-          remaining_days: dayjs(ad.end_date).diff(now, 'day')
-        })));
-      }
-
-      // 处理财务数据 - 从commission/stats获取订单数据
-      if (commissionRes.status === 'fulfilled' && commissionRes.value.data.code === 200) {
-        const data = commissionRes.value.data.data || [];
-        const totalRevenue = data.reduce((sum: number, item: any) => sum + (item.total_income || 0), 0);
-        const totalCommission = data.reduce((sum: number, item: any) => sum + (item.commission_income || 0), 0);
-        const adRevenue = data.reduce((sum: number, item: any) => sum + (item.ad_income || 0), 0);
-        
-        // 计算今日订单数（从最近7天的数据中取今天）
-        const today = dayjs().format('YYYY-MM-DD');
-        const todayStats = data.find((item: any) => dayjs(item.stat_date).format('YYYY-MM-DD') === today);
-        
-        setStats(prev => ({
-          ...prev,
-          totalRevenue,
-          totalCommission,
-          adRevenue,
-          orderToday: todayStats?.order_count || 0,
-          orderCompleted: data.reduce((sum: number, item: any) => sum + (item.order_count || 0), 0)
-        }));
-      }
-
-      // 处理订单列表数据
-      if (ordersRes.status === 'fulfilled' && ordersRes.value.data.code === 200) {
-        setRecentOrders(ordersRes.value.data.data || []);
-      }
-
     } catch (error) {
-      console.error('获取仪表盘数据失败:', error);
-    } finally {
-      setLoading(false);
+      console.error('获取酒店列表失败:', error);
     }
-  };
+
+  } catch (error) {
+    console.error('获取仪表盘数据失败:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  // 生成待办任务列表（依赖stats更新）
-  useEffect(() => {
-    const tasks: PendingTask[] = [];
-    
-    if (stats.merchantPending > 0) {
-      tasks.push({
-        id: 1,
-        type: 'merchant_audit',
-        title: '商户入驻审核',
-        subtitle: '新商户申请入驻',
-        count: stats.merchantPending,
-        url: '/audit/merchants',
-        icon: <UserAddOutlined />,
-        color: '#52c41a'
-      });
-    }
-    
-    if (stats.hotelPending > 0) {
-      tasks.push({
-        id: 2,
-        type: 'hotel_audit',
-        title: '酒店上线审核',
-        subtitle: '新酒店申请上线',
-        count: stats.hotelPending,
-        url: '/audit/hotels',
-        icon: <HomeOutlined />,
-        color: '#1890ff'
-      });
-    }
-    
-    if (stats.adPending > 0) {
-      tasks.push({
-        id: 3,
-        type: 'ad_audit',
-        title: '广告位审核',
-        subtitle: '广告投放申请',
-        count: stats.adPending,
-        url: '/audit/ads',
-        icon: <EyeOutlined />,
-        color: '#722ed1'
-      });
-    }
+// 生成待办任务列表（依赖stats更新）
+useEffect(() => {
+  const tasks: PendingTask[] = [];
+  
+  if (stats.merchantPending > 0) {
+    tasks.push({
+      id: 1,
+      type: 'merchant_audit',
+      title: '商户入驻审核',
+      subtitle: '新商户申请入驻',
+      count: stats.merchantPending,
+      url: '/audit/merchants',
+      icon: <UserAddOutlined />,
+      color: '#52c41a'
+    });
+  }
+  
+  // 新店入驻审核
+  if (stats.hotelApplyPending > 0) {
+    tasks.push({
+      id: 2,
+      type: 'hotel_apply',  // 使用新类型
+      title: '新店入驻审核',
+      subtitle: '新酒店申请上线',
+      count: stats.hotelApplyPending,
+      url: '/audit/hotels?type=hotel_apply',
+      icon: <HomeOutlined />,
+      color: '#1890ff'
+    });
+  }
+  
+  // 酒店信息修改审核
+  if (stats.hotelUpdatePending > 0) {
+    tasks.push({
+      id: 3,
+      type: 'hotel_audit',
+      title: '酒店信息修改审核',
+      subtitle: '酒店信息变更申请',
+      count: stats.hotelUpdatePending,
+      url: '/audit/hotels?type=hotel_update',  // 可以带参数筛选
+      icon: <EditOutlined />,
+      color: '#722ed1'
+    });
+  }
+  
+  if (stats.adPending > 0) {
+    tasks.push({
+      id: 4,
+      type: 'ad_audit',
+      title: '广告位审核',
+      subtitle: '广告投放申请',
+      count: stats.adPending,
+      url: '/audit/ads',
+      icon: <EyeOutlined />,
+      color: '#722ed1'
+    });
+  }
 
-    setPendingTasks(tasks);
-  }, [stats.merchantPending, stats.hotelPending, stats.adPending]);
-
-  // 获取订单状态标签
+  setPendingTasks(tasks);
+}, [stats.merchantPending, stats.hotelApplyPending, stats.hotelUpdatePending, stats.adPending]);
+  
+// 获取订单状态标签
   const getOrderStatusTag = (status: string) => {
     const statusMap: Record<string, { color: string; text: string }> = {
       'unpaid': { color: 'default', text: '待支付' },
