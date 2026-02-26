@@ -1,0 +1,206 @@
+// /pages/order/index.scss
+
+$blue:      #1a6cf5;
+$blue-lt:   #eef4ff;
+$blue-bg:   #f4f8ff;
+$blue-bd:   #d8e6fb;
+$orange:    #e05a00;
+$text:      #1a1a1a;
+$text-sub:  #888;
+$text-muted:#bbb;
+$radius-sm: 8px;
+$radius-md: 14px;
+$radius-lg: 22px;
+
+.order-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f8fafd;
+}
+
+// ─── 顶部标签栏 ───────────────────────────────────────────────────────────────
+.order-tabs {
+  display: flex;
+  background: #fff;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid #eef2fa;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  flex: 1;
+  padding: 12px 0;
+  text-align: center;
+  position: relative;
+  &.tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 20%; right: 20%;
+    height: 2.5px;
+    background: $blue;
+    border-radius: 2px;
+  }
+}
+
+.tab-txt {
+  font-size: 15px;
+  color: $text-sub;
+  font-weight: 500;
+  .tab-active & { color: $blue; font-weight: 700 }
+}
+
+// ─── 订单列表 ─────────────────────────────────────────────────────────────────
+.order-list { flex: 1; overflow: hidden; padding: 12px 12px 0 }
+
+// ─── 订单卡片 ─────────────────────────────────────────────────────────────────
+.order-card {
+  background: #fff;
+  border-radius: $radius-lg;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(26,108,245,.08);
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f4fb;
+}
+
+.order-hotel-info { flex: 1; min-width: 0 }
+.order-hotel-name {
+  font-size: 16px; font-weight: 600; color: $text;
+  margin-bottom: 4px; display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.order-no { font-size: 12px; color: $text-muted }
+
+.order-status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-left: 8px;
+  .order-status-txt { font-size: 12px; font-weight: 600 }
+}
+
+// ─── 订单内容 ─────────────────────────────────────────────────────────────────
+.order-content { display: flex; padding: 16px; gap: 12px }
+
+.order-room-img {
+  width: 100px; height: 100px;
+  border-radius: $radius-sm; flex-shrink: 0;
+}
+
+.order-room-info {
+  flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+
+.order-room-name   { font-size: 15px; font-weight: 600; color: $text }
+.order-room-detail { font-size: 13px; color: $text-sub }
+.order-date        { font-size: 13px; color: $text-sub }
+
+.order-price-row {
+  display: flex; justify-content: space-between; align-items: center; margin-top: 2px;
+}
+.order-price-label { font-size: 13px; color: $text-muted }
+.order-price-value { font-size: 18px; font-weight: 700; color: #e03030 }
+
+// ─── 操作按钮 ─────────────────────────────────────────────────────────────────
+.order-actions { display: flex; gap: 10px; padding: 0 16px 16px }
+
+.action-btn {
+  flex: 1; padding: 10px 0;
+  border: 1.5px solid $blue-bd;
+  border-radius: $radius-md;
+  background: $blue-bg;
+  text-align: center;
+  &:active { opacity: 0.8 }
+  &.action-btn-primary {
+    background: $blue; border-color: $blue;
+  }
+}
+
+.action-txt {
+  font-size: 14px; color: $blue; font-weight: 600;
+  &.action-txt-primary { color: #fff }
+}
+
+// ─── 空状态 ───────────────────────────────────────────────────────────────────
+.empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; padding: 80px 40px; gap: 12px;
+}
+.empty-ic   { font-size: 60px; color: $text-muted }
+.empty-title { font-size: 18px; font-weight: 600; color: $text }
+.empty-sub  { font-size: 14px; color: $text-sub }
+.empty-btn  {
+  margin-top: 16px; padding: 12px 40px;
+  background: $blue; border-radius: $radius-md;
+  &:active { opacity: 0.88 }
+}
+.empty-btn-txt { font-size: 16px; color: #fff; font-weight: 600 }
+
+// ─── 骨架屏 ───────────────────────────────────────────────────────────────────
+.skeleton-list { padding: 4px }
+.skeleton-card { background: #fff; border-radius: $radius-lg; margin-bottom: 12px; padding: 16px }
+.skeleton-header {
+  height: 24px; width: 60%;
+  background: linear-gradient(90deg, #ececec 25%, #f8f8f8 50%, #ececec 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: 4px; margin-bottom: 12px;
+}
+.skeleton-content-row { display: flex; gap: 12px }
+.skeleton-img {
+  width: 100px; height: 100px;
+  background: linear-gradient(90deg, #ececec 25%, #f8f8f8 50%, #ececec 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: $radius-sm; flex-shrink: 0;
+}
+.skeleton-info { flex: 1; display: flex; flex-direction: column; gap: 8px }
+.skeleton-line {
+  height: 16px;
+  background: linear-gradient(90deg, #ececec 25%, #f8f8f8 50%, #ececec 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+  &:nth-child(1) { width: 70% }
+  &:nth-child(2) { width: 50% }
+  &:nth-child(3) { width: 60% }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0 }
+  100% { background-position:  200% 0 }
+}
+
+// ─── 弹窗 ─────────────────────────────────────────────────────────────────────
+.modal-mask {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.modal-content {
+  width: 80%; background: #fff;
+  border-radius: $radius-lg; overflow: hidden;
+  &.confirm-modal { padding: 24px 20px }
+}
+
+.confirm-title { display: block; font-size: 18px; font-weight: 700; color: $text; text-align: center; margin-bottom: 12px }
+.confirm-desc  { display: block; font-size: 14px; color: $text-sub; text-align: center; margin-bottom: 24px; line-height: 1.5 }
+
+.confirm-actions { display: flex; gap: 12px }
+.confirm-btn {
+  flex: 1; padding: 12px 0;
+  border: 1.5px solid $blue-bd; border-radius: $radius-md;
+  background: $blue-bg; text-align: center;
+  &:active { opacity: 0.8 }
+  &.confirm-btn-primary { background: #e03030; border-color: #e03030 }
+}
+.confirm-btn-txt {
+  font-size: 15px; color: $blue; font-weight: 600;
+  &.confirm-btn-txt-primary { color: #fff }
+}
