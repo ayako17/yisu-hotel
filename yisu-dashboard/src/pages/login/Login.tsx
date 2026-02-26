@@ -53,39 +53,6 @@ const Login: React.FC = () => {
       
       if (error.response?.data?.msg) {
         message.error(error.response.data.msg);
-      } else if (error.code === 'ERR_NETWORK') {
-        message.error('网络连接失败，请检查后端服务');
-        // 保留商户和管理员的演示账号
-        if (values.phone === '13888888888' && values.password === 'SuperAdmin@123') {
-          message.success('演示模式：超级管理员登录成功！');
-          localStorage.setItem('token', 'demo-token-super-admin');
-          localStorage.setItem('userInfo', JSON.stringify({
-            username: '系统超级管理员',
-            role: 'super_admin',
-            phone: '13888888888'
-          }));
-          navigate('/dashboard');
-        } else if (values.phone === 'admin' && values.password === '123456') {
-          message.success('演示模式：管理员登录成功！');
-          localStorage.setItem('token', 'demo-token-admin');
-          localStorage.setItem('userInfo', JSON.stringify({
-            username: '演示管理员',
-            role: 'admin',
-            phone: 'admin'
-          }));
-          navigate('/dashboard');
-        } else if (values.phone === '13800138000' && values.password === 'Merchant@123') {
-          message.success('演示模式：商户登录成功！');
-          localStorage.setItem('token', 'demo-token-merchant');
-          localStorage.setItem('userInfo', JSON.stringify({
-            username: '演示商户',
-            role: 'merchant',
-            phone: '13800138000'
-          }));
-          navigate('/merchant/dashboard');
-        } else {
-          message.error('演示账号：超级管理员 13888888888 / SuperAdmin@123, 管理员 admin / 123456, 商户 13800138000 / Merchant@123');
-        }
       } else {
         message.error('网络连接失败或服务器错误');
       }
@@ -175,24 +142,6 @@ const Login: React.FC = () => {
               </Link>
             </div>
           </Form.Item>
-
-          {/* 演示账号提示 - 只保留商户和管理员 */}
-          <div style={{ 
-            padding: '12px', 
-            backgroundColor: '#f6ffed', 
-            border: '1px solid #b7eb8f',
-            borderRadius: '4px',
-            fontSize: '12px',
-            color: '#666',
-            marginTop: '8px'
-          }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#52c41a' }}>
-              💡 演示账号（后端服务不可用时使用）
-            </div>
-            <div>超级管理员：13888888888 / SuperAdmin@123</div>
-            <div>管理员：admin / 123456</div>
-            <div>商户：13800138000 / Merchant@123</div>
-          </div>
         </Form>
         
         <div style={{ textAlign: 'center', color: '#ccc', fontSize: 12, marginTop: 16 }}>
