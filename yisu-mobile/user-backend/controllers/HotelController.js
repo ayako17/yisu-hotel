@@ -4,7 +4,7 @@ const hotelService = new HotelService();
 class HotelController {
     async searchHotels(req, res) {
         try {
-            console.log('搜索参数:', req.query);
+            // console.log('搜索参数:', req.query);
             const result = await hotelService.searchHotels(req.query);
             res.json(result);
         } catch (error) {

@@ -10,6 +10,12 @@ export default {
   mini: {},
   h5: {
     devServer: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true
+        }
+      },
       https: {
         key: './172.20.10.5+2-key.pem',  // 私钥文件路径
         cert: './172.20.10.5+2.pem'       // 证书文件路径

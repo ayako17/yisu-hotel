@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-const BASE_URL = 'http://localhost:3001/api'
+const BASE_URL = '/api'
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
