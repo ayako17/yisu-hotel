@@ -22,26 +22,90 @@ export const getHotels = async (req: Request, res: Response) => {
 
 // 创建酒店
 export const createHotel = async (req: Request, res: Response) => {
+  const conn = await pool.getConnection();
   try {
-    const merchant_id = req.user!.user_id;
-    const { name_zh, name_en, phone, star_rating, province, city, address, cover_url, opening_date } = req.body;
+    await conn.beginTransaction();
     
-    const [result]: any = await pool.query(
+    const merchant_id = req.user!.user_id;
+    const { name_zh, name_en, phone, star_rating, province, city, address, 
+            latitude, longitude, description, opening_date } = req.body;
+    
+    // 1. 先在hotels表创建草稿记录
+    const [result]: any = await conn.query(
       `INSERT INTO hotels 
-       (merchant_id, name_zh, name_en, phone, star_rating, province, city, address, cover_url, opening_date, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [merchant_id, name_zh || '新酒店', name_en, phone || '', star_rating || 3, 
-       province, city, address || '', cover_url, opening_date || null, 'draft']
+       (merchant_id, name_zh, name_en, phone, star_rating, province, city, address, 
+        latitude, longitude, description, opening_date, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        merchant_id, 
+        name_zh || '新酒店', 
+        name_en || null, 
+        phone || '', 
+        star_rating || 3, 
+        province || null, 
+        city || null, 
+        address || '',
+        latitude || null, 
+        longitude || null, 
+        description || null, 
+        opening_date || null, 
+        'draft'  // 初始状态为草稿
+      ]
     );
+    
+    const hotel_id = result.insertId;
+    
+    // 2. 创建审核申请记录
+    const changeData = {
+      name_zh: name_zh || '新酒店',
+      name_en: name_en || null,
+      phone: phone || '',
+      star_rating: star_rating || 3,
+      province: province || null,
+      city: city || null,
+      address: address || '',
+      latitude: latitude || null,
+      longitude: longitude || null,
+      description: description || null,
+      opening_date: opening_date || null
+    };
+    
+    await conn.query(
+      `INSERT INTO audits_apply (
+        target_type, target_id, hotel_id, merchant_id, 
+        change_data, apply_reason, audit_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'hotel_apply',  // 新店入驻
+        hotel_id,
+        hotel_id,
+        merchant_id,
+        JSON.stringify(changeData),
+        '申请新酒店入驻',
+        'pending'  // 待审核
+      ]
+    );
+    
+    // 3. 更新酒店状态为待审核
+    await conn.query(
+      'UPDATE hotels SET status = ? WHERE hotel_id = ?',
+      ['pending', hotel_id]
+    );
+    
+    await conn.commit();
     
     res.json({
       code: 200,
-      data: { hotel_id: result.insertId },
-      msg: '酒店创建成功'
+      data: { hotel_id },
+      msg: '酒店创建成功，已提交审核'
     });
+    
   } catch (error) {
+    await conn.rollback();
     console.error('创建酒店失败:', error);
     res.status(500).json({ code: 500, msg: '服务器错误' });
+  } finally {
+    conn.release();
   }
 };
 // 提交酒店审核
@@ -201,49 +265,118 @@ export const getHotelDetail = async (req: Request, res: Response) => {
 };
 // 更新酒店
 export const updateHotel = async (req: Request, res: Response) => {
+  const conn = await pool.getConnection();
   try {
+    await conn.beginTransaction();
+    
     const merchant_id = req.user!.user_id;
     const { hotel_id } = req.params;
-    const { name_zh, name_en, phone, star_rating, status, province, city, address, cover_url, opening_date, description, latitude, longitude } = req.body;
+    const { name_zh, name_en, phone, star_rating, province, city, address, 
+            latitude, longitude, description, opening_date } = req.body;
     
-    // 检查权限
-    const [hotelRows]: any = await pool.query(
+    // 检查权限并获取当前酒店信息
+    const [hotelRows]: any = await conn.query(
       'SELECT * FROM hotels WHERE hotel_id = ? AND merchant_id = ?',
       [hotel_id, merchant_id]
     );
     
     if (!hotelRows.length) {
+      await conn.rollback();
       return res.status(404).json({ code: 404, msg: '酒店不存在或无权限' });
     }
     
-    await pool.query(
-      `UPDATE hotels SET 
-        name_zh = ?, name_en = ?, phone = ?, star_rating = ?, status = ?,
-        province = ?, city = ?, address = ?, cover_url = ?, opening_date = ?,
-        description = ?, latitude = ?, longitude = ?
-       WHERE hotel_id = ?`,
+    const currentHotel = hotelRows[0];
+    
+    // 检查是否有正在审核中的申请
+    const [existRows]: any = await conn.query(
+      `SELECT * FROM audits_apply 
+       WHERE target_id = ? 
+       AND target_type IN ('hotel_apply', 'hotel_update')
+       AND audit_status = 'pending'`,
+      [hotel_id]
+    );
+    
+    if (existRows.length) {
+      await conn.rollback();
+      return res.status(400).json({ 
+        code: 400, 
+        msg: '该酒店已有审核中的申请，请等待审核完成后再修改' 
+      });
+    }
+    
+    // 准备变更数据
+    const changeData: any = {};
+    
+    // 只记录有变化的字段
+    if (name_zh !== undefined && name_zh !== currentHotel.name_zh) changeData.name_zh = name_zh;
+    if (name_en !== undefined && name_en !== currentHotel.name_en) changeData.name_en = name_en;
+    if (phone !== undefined && phone !== currentHotel.phone) changeData.phone = phone;
+    if (star_rating !== undefined && star_rating !== currentHotel.star_rating) changeData.star_rating = star_rating;
+    if (province !== undefined && province !== currentHotel.province) changeData.province = province;
+    if (city !== undefined && city !== currentHotel.city) changeData.city = city;
+    if (address !== undefined && address !== currentHotel.address) changeData.address = address;
+    if (latitude !== undefined && latitude !== currentHotel.latitude) changeData.latitude = latitude;
+    if (longitude !== undefined && longitude !== currentHotel.longitude) changeData.longitude = longitude;
+    if (description !== undefined && description !== currentHotel.description) changeData.description = description;
+    if (opening_date !== undefined && opening_date !== currentHotel.opening_date) changeData.opening_date = opening_date;
+    
+    // 如果没有变化，直接返回
+    if (Object.keys(changeData).length === 0) {
+      await conn.rollback();
+      return res.json({ code: 200, msg: '没有信息需要更新' });
+    }
+    
+    // 创建审核申请记录
+    await conn.query(
+      `INSERT INTO audits_apply (
+        target_type, target_id, hotel_id, merchant_id, 
+        change_data, apply_reason, audit_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
-        name_zh || hotelRows[0].name_zh,
-        name_en || hotelRows[0].name_en,
-        phone || hotelRows[0].phone,
-        star_rating ?? hotelRows[0].star_rating,
-        status ?? hotelRows[0].status,
-        province || hotelRows[0].province,
-        city || hotelRows[0].city,
-        address || hotelRows[0].address,
-        cover_url ?? hotelRows[0].cover_url,
-        opening_date || null,
-        description ?? hotelRows[0].description,
-        latitude ?? hotelRows[0].latitude,
-        longitude ?? hotelRows[0].longitude,
-        hotel_id
+        'hotel_update',  // 信息修改
+        hotel_id,
+        hotel_id,
+        merchant_id,
+        JSON.stringify({
+          new: changeData,
+          old: {
+            name_zh: currentHotel.name_zh,
+            name_en: currentHotel.name_en,
+            phone: currentHotel.phone,
+            star_rating: currentHotel.star_rating,
+            province: currentHotel.province,
+            city: currentHotel.city,
+            address: currentHotel.address,
+            latitude: currentHotel.latitude,
+            longitude: currentHotel.longitude,
+            description: currentHotel.description,
+            opening_date: currentHotel.opening_date
+          }
+        }),
+        '申请修改酒店信息',
+        'pending'
       ]
     );
     
-    res.json({ code: 200, msg: '酒店信息已更新' });
+    // 更新酒店状态为待审核
+    await conn.query(
+      'UPDATE hotels SET status = ? WHERE hotel_id = ?',
+      ['pending', hotel_id]
+    );
+    
+    await conn.commit();
+    
+    res.json({ 
+      code: 200, 
+      msg: '修改已提交审核，请等待管理员审批' 
+    });
+    
   } catch (error) {
+    await conn.rollback();
     console.error('更新酒店失败:', error);
     res.status(500).json({ code: 500, msg: '服务器错误' });
+  } finally {
+    conn.release();
   }
 };
 

@@ -6,6 +6,8 @@ import path from "path";
 import { testConnection } from "./config/db";
 import routes from "./routes/index";
 import './utils/cronJobs';
+import profileRoutes from "./routes/admin/profileRoutes";
+import authRoutes from "./routes/admin/authRoutes";
 dotenv.config();
 
 const app = express();
@@ -21,7 +23,9 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // 使用路由
 app.use("/api", routes);
-
+// 路由挂载
+app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
 // 健康检查
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", time: new Date() });

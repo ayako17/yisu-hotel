@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const userId = (req as any).user?.userId;
+    const userId = (req as any).user?.userId || (req as any).user?.user_id;
     const timestamp = Date.now();
     const ext = path.extname(file.originalname);
     cb(null, `avatar_${userId}_${timestamp}${ext}`);
@@ -48,11 +48,16 @@ export const handleAvatarUpload = async (req: Request, res: Response) => {
       return res.json({ code: 400, msg: '请选择要上传的头像' });
     }
 
+    // 获取用户ID（兼容两种字段名）
+    const userId = (req as any).user?.userId || (req as any).user?.user_id;
+    if (!userId) {
+      return res.json({ code: 401, msg: '未登录或token无效' });
+    }
+
     // 生成可访问的URL
     const avatarUrl = `/uploads/avatars/${req.file.filename}`;
     
     // 更新数据库中的头像地址
-    const userId = (req as any).user.userId;
     await pool.execute(
       'UPDATE users SET avatar_url = ?, updated_at = NOW() WHERE user_id = ?',
       [avatarUrl, userId]
@@ -72,8 +77,12 @@ export const handleAvatarUpload = async (req: Request, res: Response) => {
 // 获取个人信息
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user?.userId || (req as any).user?.user_id;
     
+    if (!userId) {
+      return res.json({ code: 401, msg: '未登录或token无效' });
+    }
+
     const [rows]: any = await pool.execute(
       `SELECT 
         user_id, 
@@ -107,6 +116,7 @@ export const getProfile = async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    console.error('获取个人信息错误:', error);
     res.json({ code: 500, msg: error.message });
   }
 };
@@ -114,8 +124,12 @@ export const getProfile = async (req: Request, res: Response) => {
 // 更新个人信息
 export const updateProfile = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user?.userId || (req as any).user?.user_id;
     const { username, phone, avatar_url } = req.body;
+
+    if (!userId) {
+      return res.json({ code: 401, msg: '未登录或token无效' });
+    }
 
     // 验证数据
     if (!username || username.trim() === '') {
@@ -139,19 +153,29 @@ export const updateProfile = async (req: Request, res: Response) => {
     // 更新用户信息
     await pool.execute(
       'UPDATE users SET username = ?, phone = ?, avatar_url = ?, updated_at = NOW() WHERE user_id = ?',
-      [username, phone, avatar_url, userId]
+      [username, phone, avatar_url || null, userId]
     );
 
     // 获取更新后的用户信息
     const [updatedRows]: any = await pool.execute(
-      'SELECT user_id, phone, username, avatar_url, role FROM users WHERE user_id = ?',
+      'SELECT user_id, phone, username, avatar_url, role, status, created_at, updated_at FROM users WHERE user_id = ?',
       [userId]
     );
 
+    const user = updatedRows[0];
     res.json({
       code: 200,
       msg: '个人信息更新成功',
-      data: updatedRows[0]
+      data: {
+        userId: user.user_id,
+        phone: user.phone,
+        username: user.username,
+        avatar_url: user.avatar_url,
+        role: user.role,
+        status: user.status,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      }
     });
   } catch (error: any) {
     console.error('更新个人信息错误:', error);
@@ -162,8 +186,17 @@ export const updateProfile = async (req: Request, res: Response) => {
 // 修改密码
 export const updatePassword = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = (req as any).user?.userId || (req as any).user?.user_id;
     const { oldPassword, newPassword } = req.body;
+
+    if (!userId) {
+      return res.json({ code: 401, msg: '未登录或token无效' });
+    }
+
+    // 验证新密码长度
+    if (newPassword.length < 6) {
+      return res.json({ code: 400, msg: '新密码长度至少6位' });
+    }
 
     // 获取当前用户信息
     const [rows]: any = await pool.execute(

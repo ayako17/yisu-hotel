@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useRef } from 'react';
 import { 
   Card, 
   Form, 
@@ -15,7 +15,9 @@ import {
   Tabs,
   Row,
   Col,
-  Statistic
+  Statistic,
+  App,
+  Spin
 } from 'antd';
 import { 
   UserOutlined, 
@@ -26,90 +28,49 @@ import {
   LockOutlined,
   CameraOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 import ImgCrop from 'antd-img-crop';
-import axios from '../../../services/axios'; 
+import axios from '../../../services/axios';
+import { useNavigate } from 'react-router-dom';
 
 const { TabPane } = Tabs;
 const { Password } = Input;
 
 const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [userInfo, setUserInfo] = useState<any>(null);
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('info');
   const [avatarFileList, setAvatarFileList] = useState<UploadFile[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  // 加载用户信息
-  useEffect(() => {
-    // 先从 localStorage 获取
-    const userStr = localStorage.getItem('userInfo');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        console.log('localStorage 中的用户信息:', user);
-        setUserInfo(user);
-        form.setFieldsValue({
-          username: user.username,
-          phone: user.phone,
-        });
-        
-        // 如果有头像地址，设置预览
-        if (user.avatar_url) {
-          setAvatarFileList([
-            {
-              uid: '-1',
-              name: 'avatar.png',
-              status: 'done',
-              url: user.avatar_url,
-            }
-          ]);
-        }
-      } catch (error) {
-        console.error('解析用户信息失败:', error);
-      }
-    }
+  // // 加载用户信息
+  // useEffect(() => {
+  //   fetchUserProfile();
+  // }, []);
 
-    // 从后端获取最新的用户信息
-    fetchUserProfile();
-  }, [form]);
+  const hasLoadedRef = useRef(false);
 
  // 获取最新的用户信息
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = async (showMessage = true) => {
+    setLoading(true);
     try {
       const res = await axios.get('/profile');
       if (res.data.code === 200) {
         const userData = res.data.data;
         console.log('后端返回的用户信息:', userData);
         
-        // 从 localStorage 获取登录时保存的 last_login
-        const storedUser = localStorage.getItem('userInfo');
-        let lastLogin = userData.updatedAt; // 默认使用 updatedAt
+        setUserInfo(userData);
         
-        if (storedUser) {
-          try {
-            const parsedStoredUser = JSON.parse(storedUser);
-            // 如果 localStorage 中有 last_login，优先使用
-            lastLogin = parsedStoredUser.last_login || parsedStoredUser.lastLogin || userData.updatedAt;
-          } catch (e) {
-            console.error('解析 localStorage 用户信息失败:', e);
-          }
-        }
-        
-        // 合并数据
-        const enhancedUserData = {
-          ...userData,
-          last_login: lastLogin,
-          lastLogin: lastLogin
-        };
-        
-        setUserInfo(enhancedUserData);
-        localStorage.setItem('userInfo', JSON.stringify(enhancedUserData));
-        
+        // 更新表单
         form.setFieldsValue({
           username: userData.username,
           phone: userData.phone,
@@ -122,83 +83,105 @@ const Profile: React.FC = () => {
               uid: '-1',
               name: 'avatar.png',
               status: 'done',
-              url: userData.avatar_url,
+              url: userData.avatar_url.startsWith('http') 
+                ? userData.avatar_url 
+                : `http://localhost:3000${userData.avatar_url}`,
             }
           ]);
+        }
+
+        // 同步更新 localStorage
+        localStorage.setItem('userInfo', JSON.stringify({
+          user_id: userData.userId,
+          username: userData.username,
+          role: userData.role,
+          phone: userData.phone,
+          avatar_url: userData.avatar_url
+        }));
+
+        // 只在需要时显示成功消息
+        if (showMessage) {
+          message.success('个人信息加载成功');
         }
       }
     } catch (error) {
       console.error('获取用户信息失败:', error);
+      message.error('获取用户信息失败，请刷新页面重试');
+    } finally {
+      setLoading(false);
     }
   };
 
-// 保存个人信息
-const handleSave = async (values: any) => {
-  setLoading(true);
-  try {
-    // 如果有上传头像
-    let avatarUrl = userInfo?.avatar_url;
-    if (avatarFileList.length > 0 && avatarFileList[0].originFileObj) {
-      const formData = new FormData();
-      formData.append('avatar', avatarFileList[0].originFileObj);
-      
-      const uploadRes = await axios.post('/profile/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      if (uploadRes.data.code === 200) {
-        avatarUrl = uploadRes.data.data.url;
-      }
+
+  // 加载用户信息
+  useEffect(() => {
+    // 使用 ref 确保只执行一次
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      fetchUserProfile(true);  
     }
+  }, []);  // 空依赖数组，只在组件挂载时执行
 
-    const res = await axios.put('/profile', {
-      username: values.username,
-      phone: values.phone,
-      avatar_url: avatarUrl
-    });
 
-    if (res.data.code === 200) {
-      message.success('个人信息更新成功');
-      setEditing(false);
+// 保存个人信息
+  const handleSave = async (values: any) => {
+    setSaveLoading(true);
+    try {
+      // 先上传头像（如果有新头像）
+      let avatarUrl = userInfo?.avatar_url;
+      if (avatarFileList.length > 0 && avatarFileList[0].originFileObj) {
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('avatar', avatarFileList[0].originFileObj);
+        
+        const uploadRes = await axios.post('/profile/avatar', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (uploadRes.data.code === 200) {
+          avatarUrl = uploadRes.data.data.url;
+          message.success('头像上传成功');
+        } else {
+          throw new Error(uploadRes.data.msg || '头像上传失败');
+        }
+        setUploading(false);
+      }
 
-      const updatedUserInfo = { 
-        ...userInfo, 
+      // 更新个人信息
+      const res = await axios.put('/profile', {
         username: values.username,
         phone: values.phone,
         avatar_url: avatarUrl
-      };
-      setUserInfo(updatedUserInfo);
-      localStorage.setItem('userInfo', JSON.stringify(updatedUserInfo));
-      
-      if (avatarUrl) {
-        setAvatarFileList([
-          {
-            uid: '-1',
-            name: 'avatar.png',
-            status: 'done',
-            url: avatarUrl,
-          }
-        ]);
+      });
+
+      if (res.data.code === 200) {
+        message.success('个人信息更新成功！');
+        setEditing(false);
+        
+        // 重新获取最新数据，不显示加载成功消息
+        await fetchUserProfile(false);
+        
+        // 触发全局事件，通知 MainLayout 更新
+        window.dispatchEvent(new CustomEvent('userInfoUpdated', { 
+          detail: res.data.data 
+        }));
+      } else {
+        message.error(res.data.msg || '更新失败');
       }
-
-      // 重新获取最新信息
-      fetchUserProfile();
-    } else {
-      message.error(res.data.msg || '更新失败');
+    } catch (error: any) {
+      console.error('更新个人信息失败:', error);
+      message.error(error.response?.data?.msg || error.message || '更新失败，请重试');
+    } finally {
+      setSaveLoading(false);
+      setUploading(false);
     }
-  } catch (error: any) {
-    console.error('更新个人信息失败:', error);
-    message.error(error.response?.data?.msg || '更新失败');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-  // 修改密码
+// 修改密码
   const handlePasswordChange = async (values: any) => {
-    setLoading(true);
+    setPasswordLoading(true);
     try {
       const res = await axios.put('/profile/password', {
         oldPassword: values.oldPassword,
@@ -206,31 +189,72 @@ const handleSave = async (values: any) => {
       });
 
       if (res.data.code === 200) {
-        message.success('密码修改成功');
+        message.success('密码修改成功，请重新登录');  // 直接使用 message
         passwordForm.resetFields();
+        
         Modal.success({
           title: '密码修改成功',
           content: '请使用新密码重新登录',
+          okText: '确定',
           onOk: () => {
             localStorage.removeItem('token');
             localStorage.removeItem('userInfo');
-            window.location.href = '/login';
+            navigate('/login');
           }
         });
       } else {
-        message.error(res.data.msg || '密码修改失败');
+        message.error(res.data.msg || '密码修改失败');  // 直接使用 message
       }
     } catch (error: any) {
       console.error('修改密码失败:', error);
-      message.error(error.response?.data?.msg || '密码修改失败');
+      message.error(error.response?.data?.msg || error.message || '密码修改失败');  // 直接使用 message
     } finally {
-      setLoading(false);
+      setPasswordLoading(false);
     }
   };
 
   // 头像上传处理
   const handleAvatarChange: UploadProps['onChange'] = ({ fileList: newFileList }) => {
     setAvatarFileList(newFileList);
+  };
+
+  // 头像上传前的验证
+  const beforeAvatarUpload = (file: File) => {
+    const isImage = file.type.startsWith('image/');
+    if (!isImage) {
+      message.error('只能上传图片文件！');  // 改为 message
+      return false;
+    }
+    const isLt5M = file.size / 1024 / 1024 < 5;
+    if (!isLt5M) {
+      message.error('图片不能超过5MB！');  // 改为 message
+      return false;
+    }
+    return true;
+  };
+
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setEditing(false);
+    form.setFieldsValue({
+      username: userInfo?.username,
+      phone: userInfo?.phone,
+    });
+    // 恢复头像
+    if (userInfo?.avatar_url) {
+      setAvatarFileList([
+        {
+          uid: '-1',
+          name: 'avatar.png',
+          status: 'done',
+          url: userInfo.avatar_url.startsWith('http') 
+            ? userInfo.avatar_url 
+            : `http://localhost:3000${userInfo.avatar_url}`,
+        }
+      ]);
+    } else {
+      setAvatarFileList([]);
+    }
   };
 
   const getRoleTag = (role: string) => {
@@ -253,12 +277,11 @@ const handleSave = async (values: any) => {
     );
   };
 
- // 格式化日期
+  // 格式化日期
   const formatDate = (dateString: string | undefined) => {
     if (!dateString) return '未知';
     try {
       const date = new Date(dateString);
-      // 检查日期是否有效
       if (isNaN(date.getTime())) return '未知';
       
       return date.toLocaleString('zh-CN', {
@@ -274,7 +297,7 @@ const handleSave = async (values: any) => {
     }
   };
 
- const formatDateShort = (dateString: string | undefined) => {
+  const formatDateShort = (dateString: string | undefined) => {
     if (!dateString) return '未知';
     try {
       const date = new Date(dateString);
@@ -290,6 +313,14 @@ const handleSave = async (values: any) => {
     }
   };
 
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '400px' }}>
+        <Spin size="large" tip="加载中..." />
+      </div>
+    );
+  }
+
   return (
     <div>
       <Card title="个人中心" bordered={false} style={{ marginBottom: 24 }}>
@@ -297,46 +328,54 @@ const handleSave = async (values: any) => {
           <TabPane tab="个人信息" key="info">
             <div style={{ display: 'flex', marginBottom: 32, alignItems: 'flex-start' }}>
               <div style={{ marginRight: 32, textAlign: 'center' }}>
-              {editing ? (
-                <div>
-                  <ImgCrop rotationSlider aspect={1}>
-                    <Upload
-                      listType="picture-circle"
-                      fileList={avatarFileList}
-                      onChange={handleAvatarChange}
-                      maxCount={1}
-                      beforeUpload={() => false}
-                    >
-                      {avatarFileList.length < 1 && (
-                        <div>
-                          <CameraOutlined style={{ fontSize: 24 }} />
-                          <div style={{ marginTop: 8 }}>上传头像</div>
-                        </div>
-                      )}
-                    </Upload>
-                  </ImgCrop>
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
-                    支持 JPG/PNG 格式，建议 200x200 像素
+                {editing ? (
+                  <div>
+                    <ImgCrop rotationSlider aspect={1}>
+                      <Upload
+                        listType="picture-circle"
+                        fileList={avatarFileList}
+                        onChange={handleAvatarChange}
+                        maxCount={1}
+                        beforeUpload={beforeAvatarUpload}
+                        disabled={uploading}
+                      >
+                        {avatarFileList.length < 1 && (
+                          <div>
+                            <CameraOutlined style={{ fontSize: 24 }} />
+                            <div style={{ marginTop: 8 }}>上传头像</div>
+                          </div>
+                        )}
+                      </Upload>
+                    </ImgCrop>
+                    {uploading && (
+                      <div style={{ marginTop: 8 }}>
+                        <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                        <span style={{ marginLeft: 8, fontSize: 12, color: '#999' }}>上传中...</span>
+                      </div>
+                    )}
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+                      支持 JPG/PNG 格式，建议 200x200 像素
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <Avatar 
-                  size={100} 
-                  src={userInfo?.avatar_url}
-                  icon={!userInfo?.avatar_url && <UserOutlined />}
-                  style={{ 
-                    // 有头像时背景透明，无头像时根据角色显示颜色
-                    backgroundColor: userInfo?.avatar_url 
-                      ? 'transparent' 
-                      : (userInfo?.role === 'super_admin' ? '#f5222d' : 
-                        userInfo?.role === 'admin' ? '#1890ff' : '#52c41a'),
-                    fontSize: 48,
-                    border: '4px solid #f0f0f0',
-                    // 添加 objectFit 确保头像图片显示正确
-                    objectFit: 'cover'
-                  }}
-                />
-              )}
+                ) : (
+                  <Avatar 
+                    size={100} 
+                    src={userInfo?.avatar_url?.startsWith('http') 
+                      ? userInfo?.avatar_url 
+                      : `http://localhost:3000${userInfo?.avatar_url || ''}`
+                    }
+                    icon={!userInfo?.avatar_url && <UserOutlined />}
+                    style={{ 
+                      backgroundColor: userInfo?.avatar_url 
+                        ? 'transparent' 
+                        : (userInfo?.role === 'super_admin' ? '#f5222d' : 
+                           userInfo?.role === 'admin' ? '#1890ff' : '#52c41a'),
+                      fontSize: 48,
+                      border: '4px solid #f0f0f0',
+                      objectFit: 'cover'
+                    }}
+                  />
+                )}
               </div>
               
               <div style={{ flex: 1 }}>
@@ -380,12 +419,12 @@ const handleSave = async (values: any) => {
                           <Button 
                             type="primary" 
                             htmlType="submit" 
-                            loading={loading} 
+                            loading={saveLoading} 
                             icon={<SaveOutlined />}
                           >
                             保存修改
                           </Button>
-                          <Button onClick={() => setEditing(false)}>
+                          <Button onClick={handleCancelEdit} disabled={saveLoading}>
                             取消
                           </Button>
                         </Space>
@@ -415,7 +454,7 @@ const handleSave = async (values: any) => {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', color: '#666' }}>
                         <SafetyOutlined style={{ marginRight: 8, color: '#52c41a' }} />
-                        <span>ID: {userInfo?.user_id || userInfo?.userId || 'N/A'}</span>
+                        <span>ID: {userInfo?.userId || userInfo?.user_id || 'N/A'}</span>
                       </div>
                     </Space>
                     
@@ -442,13 +481,13 @@ const handleSave = async (values: any) => {
                   <Col span={8}>
                     <Statistic 
                       title="注册时间" 
-                      value={formatDateShort(userInfo?.createdAt)}
+                      value={formatDateShort(userInfo?.createdAt || userInfo?.created_at)}
                     />
                   </Col>
                   <Col span={8}>
                     <Statistic 
-                      title="最后登录" 
-                      value={formatDateShort(userInfo?.last_login || userInfo?.lastLogin || userInfo?.updatedAt)}
+                      title="首次登录" 
+                      value={formatDateShort(userInfo?.createdAt || userInfo?.created_at)}
                     />
                   </Col>
                   <Col span={8}>
@@ -468,16 +507,19 @@ const handleSave = async (values: any) => {
                 >
                   <Descriptions.Item label="用户ID">
                     <span style={{ fontFamily: 'monospace' }}>
-                      {userInfo?.user_id || userInfo?.userId || 'N/A'}
+                      {userInfo?.userId || userInfo?.user_id || 'N/A'}
                     </span>
                   </Descriptions.Item>
                   <Descriptions.Item label="手机号">{userInfo?.phone}</Descriptions.Item>
                   <Descriptions.Item label="用户角色">{getRoleTag(userInfo?.role)}</Descriptions.Item>
                   <Descriptions.Item label="注册时间">
-                    {formatDate(userInfo?.created_at || userInfo?.createdAt)}
+                    {formatDate(userInfo?.createdAt || userInfo?.created_at)}
                   </Descriptions.Item>
-                  <Descriptions.Item label="最后登录">
-                    {formatDate(userInfo?.last_login || userInfo?.lastLogin || userInfo?.updatedAt)}
+                  <Descriptions.Item label="首次登录">
+                    {formatDate(userInfo?.createdAt || userInfo?.created_at)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="最后更新">
+                    {formatDate(userInfo?.updatedAt || userInfo?.updated_at)}
                   </Descriptions.Item>
                 </Descriptions>
               </div>
@@ -555,7 +597,7 @@ const handleSave = async (values: any) => {
                     <Button 
                       type="primary" 
                       htmlType="submit" 
-                      loading={loading}
+                      loading={passwordLoading}
                       block
                       style={{ height: 40 }}
                     >
