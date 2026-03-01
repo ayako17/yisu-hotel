@@ -92,9 +92,6 @@ class HotelModel {
         sql += ' ORDER BY h.created_at DESC LIMIT ? OFFSET ?';
         params.push(limit, offset);
         
-        console.log('SQL:', sql);
-        console.log('Params:', params);
-        
         const [rows] = await pool.query(sql, params);
         return rows;
     }

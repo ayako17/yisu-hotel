@@ -224,7 +224,6 @@ const CityPanel: React.FC<CPProps> = ({ areaType,onSelect,onClose }) => {
             :filtered.map(c=>(
               <View key={c} className='city-row' onClick={()=>{onSelect(c);onClose()}}>
                 <Text className='city-row-name'>{c}</Text>
-                <Text className='city-row-arr'>›</Text>
               </View>
             ))
           ):(
@@ -234,7 +233,6 @@ const CityPanel: React.FC<CPProps> = ({ areaType,onSelect,onClose }) => {
                 {list.map(c=>(
                   <View key={c} className='city-row' onClick={()=>{onSelect(c);onClose()}}>
                     <Text className='city-row-name'>{c}</Text>
-                    <Text className='city-row-arr'>›</Text>
                   </View>
                 ))}
               </View>
@@ -312,7 +310,7 @@ const Home: React.FC = () => {
       const today = fmtDate(new Date())
       // 调用接口获取当前有效的广告
       const response = await Taro.request({
-        url: 'http://localhost:3001/api/ads/active', 
+        url: '/api/ads/active', 
         method: 'GET',
         data: {
           current_date: today
@@ -625,7 +623,7 @@ const handleLocate = async () => {
       />
 
       {/* 入住人数 */}
-      <BottomSheet visible={showGuest} onClose={()=>setShowGuest(false)} height='28vh'>
+      <BottomSheet visible={showGuest} onClose={()=>setShowGuest(false)} height='30vh'>
         <Text className='bs-title'>入住信息</Text>
         <View className='guest-list'>
           {([['房间数',rooms,setRooms,1],['成人',adults,setAdults,1],['儿童',children,setChildren,0]] as [string,number,React.Dispatch<React.SetStateAction<number>>,number][]).map(([lbl,val,set,min])=>(
@@ -652,7 +650,7 @@ const handleLocate = async () => {
       </BottomSheet>
 
       {/* 价格 + 星级 */}
-      <BottomSheet visible={showFilter} onClose={confirmFilter} height='45vh'>
+      <BottomSheet visible={showFilter} onClose={confirmFilter} height='52vh'>
         <Text className='bs-title'>价格 · 星级</Text>
         <ScrollView className='filter-scroll' scrollY>
           <Text className='filter-sec-title'>价格区间</Text>
@@ -688,7 +686,7 @@ const handleLocate = async () => {
       </BottomSheet>
 
       {/* 标签 */}
-      <BottomSheet visible={showTagModal} onClose={()=>setShowTagModal(false)} height='35vh'>
+      <BottomSheet visible={showTagModal} onClose={()=>setShowTagModal(false)} height='40vh'>
         <Text className='bs-title'>筛选标签</Text>
         <ScrollView className='filter-scroll' scrollY>
           {([['设施',FACILITY_TAGS],['特色',SPECIAL_TAGS]] as [string,Tag[]][]).map(([lbl,list])=>(

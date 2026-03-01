@@ -24,9 +24,9 @@ $tab-h:       56px;
 // ─── 广告轮播 ─────────────────────────────────────────────────────────────────
 .ad-swiper {
   width: 100%;
-  height: 400px;   // 更高更大方
+  height: 460px;   // 更高更大方
   display: block;
-  padding-bottom: 80px;
+  padding-bottom: 30px;
 }
 
 .ad-item {
@@ -57,7 +57,7 @@ $tab-h:       56px;
 // ─── 搜索卡片 ─────────────────────────────────────────────────────────────────
 // 卡片叠在轮播上，margin-top 负值让它往下挪、更多露出广告
 .card {
-  margin: -28px 18px 0;   // 卡片覆盖最后 28px 广告区（让广告更显眼）
+  margin: -20px 18px 0;   // 卡片覆盖最后 28px 广告区（让广告更显眼）
   background: #fff;
   border-radius: $radius-lg;
   padding: 24px 20px 20px;
@@ -88,7 +88,7 @@ $tab-h:       56px;
 }
 
 .area-tab-txt {
-  font-size: 28px;
+  font-size: 35px;
   font-weight: 300;
   color: #666;
 
@@ -99,7 +99,7 @@ $tab-h:       56px;
 .loc-row {
   display: flex;
   align-items: center;
-  height: 75px;
+  height: 120px;
   background: $blue-bg;
   border: 1.5px solid $blue-bd;
   border-radius: $radius-md;
@@ -109,18 +109,18 @@ $tab-h:       56px;
 .city-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 15px;
   padding: 0 14px;
   height: 100%;
   flex-shrink: 0;
 }
 
-.city-val  { font-size: 25px; font-weight: 700; color: $text; }
-.chev      { font-size: 30px; color: $text-muted; margin-left: 3px; }
+.city-val  { font-size: 45px; font-weight: 700; color: $text; margin-left: 25px;}
+.chev      { font-size: 50px; color: $text-muted; margin-left: 3px; }
 
 .loc-sep {
   width: 1px;
-  height: 24px;
+  height: 80px;
   background: $blue-bd;
   flex-shrink: 0;
 }
@@ -129,17 +129,17 @@ $tab-h:       56px;
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 20px;
   padding: 0 12px;
   height: 100%;
 }
 
-.kw-ic  { font-size: 30px; color: #c0cce8; }
+.kw-ic  { font-size: 80px; color: #e2e6ed; }
 .kw-inp {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 25px;
+  font-size: 45px;
   color: $text;
   height: 100%;
   display: flex;        /* 让输入框内部也能居中 */
@@ -156,14 +156,14 @@ $tab-h:       56px;
   border-left: 1.5px solid $blue-bd;
 }
 
-.locate-ic { font-size: 45px; color: $blue; }
+.locate-ic { font-size: 50px; color: $blue; margin-right: 55px;}
 
 // ─── 日期行 ───────────────────────────────────────────────────────────────────
 .date-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 75px;
+  height: 120px;
   background: $blue-bg;
   border: 1.5px solid $blue-bd;
   border-radius: $radius-md;
@@ -172,7 +172,7 @@ $tab-h:       56px;
 
 .date-val {
   flex: 0.3;
-  font-size: 25px;
+  font-size: 45px;
   font-weight: 700;
   color: $text;
   text-align: left;
@@ -189,11 +189,11 @@ $tab-h:       56px;
 }
 
 .date-nights {
-  font-size: 18px;
+  font-size: 30px;
   font-weight: 700;
   color: #fff;
   background: $blue;
-  padding: 5px 12px;
+  padding: 5px 20px;
   border-radius: 8px;
 }
 
@@ -202,14 +202,23 @@ $tab-h:       56px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  height: 50px;
+  height: 120px;
+  // 第一个 fchip (入住信息) 
+  > .fchip:first-child {
+    flex: 3.5;  
+  }
+  
+  // 第二个 fchip (筛选条件) 
+  > .fchip:last-child {
+    flex: 2;  
+  }
 }
 
 .fchip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
+  gap: 40px;
+  padding: 10px 47px;
   border-radius: $radius-md;
   border: 1.5px solid $blue-bd;
   background: $blue-bg;
@@ -221,7 +230,7 @@ $tab-h:       56px;
 }
 
 .fchip-txt {
-  font-size: 25px;
+  font-size: 45px;
   color: #444;
   font-weight: 700;
 
@@ -235,7 +244,7 @@ $tab-h:       56px;
 
 .tag-row {
   display: flex;
-  gap: 8px;
+  gap: 5px;
   white-space: nowrap;
   padding: 2px 0;
   margin-top:12px;
@@ -257,7 +266,7 @@ $tab-h:       56px;
 }
 
 .tag-txt {
-  font-size: 18px;
+  font-size: 28px;
   color: #555;
   font-weight: 500;
   white-space: nowrap;
@@ -276,7 +285,7 @@ $tab-h:       56px;
 }
 
 .tag-more-txt {
-  font-size: 18px;
+  font-size: 28px;
   color: $orange-btn;
   font-weight: 700;
   white-space: nowrap;
@@ -286,20 +295,19 @@ $tab-h:       56px;
 .search-btn {
   background: $blue;
   border-radius: $radius-md;
-  padding: 17px 0;
+  padding: 30px 0px 8px;
   text-align: center;
   box-shadow: 0 4px 20px rgba(26, 108, 245, 0.32);
-
-  height:65px;
+  height:100px;
   margin-top:10px;
   &:active { opacity: 0.88; }
 }
 
 .search-btn-txt {
-  font-size: 30px;
+  font-size: 45px;
   font-weight: 700;
   color: #fff;
-  letter-spacing: 2px;
+  letter-spacing: 5px;
 }
 
 // ─── Bottom Sheet 通用 ────────────────────────────────────────────────────────
@@ -346,7 +354,7 @@ $tab-h:       56px;
 
 .bs-title {
   display: block;
-  font-size: 25px;
+  font-size: 40px;
   font-weight: 700;
   color: $text;
   text-align: center;
@@ -386,7 +394,7 @@ $tab-h:       56px;
 }
 
 .bs-clear-txt {
-  font-size: 25px;
+  font-size: 35px;
   font-weight: 600;
   color: #666;
 }
@@ -401,7 +409,7 @@ $tab-h:       56px;
 }
 
 .bs-done-txt {
-  font-size: 25px;
+  font-size: 35px;
   font-weight: 700;
   color: #fff;
 }
@@ -409,7 +417,7 @@ $tab-h:       56px;
 // ─── 日历 Sheet 内部 ──────────────────────────────────────────────────────────
 .cal-tip {
   display: block;
-  font-size: 22px;
+  font-size: 35px;
   color: $text-sub;
   text-align: center;
   padding: 0 24px 14px;
@@ -428,7 +436,7 @@ $tab-h:       56px;
 
 .cal-month-title {
   display: block;
-  font-size: 25px;
+  font-size: 35px;
   font-weight: 500;
   color: $text;
   padding: 18px 0 12px;
@@ -443,7 +451,7 @@ $tab-h:       56px;
 
 .cal-wk {
   text-align: center;
-  font-size: 22px;
+  font-size: 30px;
   font-weight: 600;
   color: $text-sub;
   padding: 4px 0;
@@ -469,7 +477,7 @@ $tab-h:       56px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 48px;
+  height: 65px;
   border-radius: 5px;
 
   &.ep  { background: $blue; }
@@ -478,7 +486,7 @@ $tab-h:       56px;
 
 // 日期数字
 .dn {
-  font-size: 22px;
+  font-size: 40px;
   font-weight: 400;
   color: $text;
   line-height: 1;
@@ -490,10 +498,10 @@ $tab-h:       56px;
 
 // 农历/节气副标签
 .ds {
-  font-size: 12px;
+  font-size: 15px;
   color: $text-muted;
   margin-top: 3px;
-  max-width: 36px;
+  max-width: 50px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -517,7 +525,7 @@ $tab-h:       56px;
 }
 
 .cal-done-txt {
-  font-size: 25px;
+  font-size: 35px;
   font-weight: 700;
   color: #fff;
   letter-spacing: 2px;
@@ -543,8 +551,8 @@ $tab-h:       56px;
   gap: 3px;
 }
 
-.guest-lbl { font-size: 22px; color: $text; font-weight: 500; }
-.guest-sub { font-size: 18px; color: $text-muted; }
+.guest-lbl { font-size: 35px; color: $text; font-weight: 500; }
+.guest-sub { font-size: 25px; color: $text-muted; }
 
 .guest-ctrl {
   display: flex;
@@ -570,15 +578,15 @@ $tab-h:       56px;
   &:active { background: $blue-lt; }
 }
 
-.step-ic  { font-size: 25px; color: $blue; font-weight: 500; line-height: 1; }
-.step-val { font-size: 25px; font-weight: 600; color: $text; min-width: 24px; text-align: center; }
+.step-ic  { font-size: 35px; color: $blue; font-weight: 500; line-height: 1; }
+.step-val { font-size: 35px; font-weight: 600; color: $text; min-width: 24px; text-align: center; }
 
 // ─── 价格 + 星级 sheet ────────────────────────────────────────────────────────
 .filter-scroll { flex: 1; overflow: hidden; }
 
 .filter-sec-title {
   display: block;
-  font-size: 22px;
+  font-size: 35px;
   font-weight: 600;
   color: $text-sub;
   letter-spacing: 0.5px;
@@ -611,7 +619,7 @@ $tab-h:       56px;
 }
 
 .price-txt {
-  font-size: 24px;
+  font-size: 30px;
   color: #333;
   font-weight: 500;
 
@@ -642,8 +650,8 @@ $tab-h:       56px;
   &:active { opacity: 0.8; }
 }
 
-.star-stars { font-size: 22px; color: #f5a623; }
-.star-lbl   { font-size: 24px; color: #444; font-weight: 500; .star-on & { color: $blue; font-weight: 600; } }
+.star-stars { font-size: 35px; color: #f5a623; }
+.star-lbl   { font-size: 30px; color: #444; font-weight: 500; .star-on & { color: $blue; font-weight: 600; } }
 
 // ─── 标签 sheet ───────────────────────────────────────────────────────────────
 .tag-sec { padding: 0 24px 8px; }
@@ -656,7 +664,7 @@ $tab-h:       56px;
 }
 
 .modal-chip {
-  padding: 5px 12px;
+  padding: 8px 15px;
   border-radius:$radius-sm;
   border: 1.5px solid $blue-bd;
   background: $blue-bg;
@@ -670,7 +678,7 @@ $tab-h:       56px;
 }
 
 .modal-chip-txt {
-  font-size: 22px;
+  font-size: 30px;
   color: #444;
   font-weight: 500;
 
@@ -691,14 +699,14 @@ $tab-h:       56px;
   display: flex;
   align-items: center;
   justify-content: space-between;  /* 保持两端布局 */
-  padding: 16px 18px;
+  padding: 18px 18px;
   border-bottom: 1px solid #eef2fa;
   position: relative;  /* 为绝对定位做准备 */
-  height:30px;
+  height:50px;
 }
 
 .city-title { 
-  font-size: 25px; 
+  font-size: 35px; 
   font-weight: 600; 
   color: $text; 
   position: absolute;      /* 绝对定位 */
@@ -711,7 +719,7 @@ $tab-h:       56px;
 .city-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 15px;
   margin: 12px 18px;
   padding: 11px 16px;
   background: $blue-bg;
@@ -719,8 +727,8 @@ $tab-h:       56px;
   border-radius: $radius-md;
 }
 
-.city-si  { font-size: 30px; color: $text-muted; }
-.city-inp { flex: 1; border: none; background: transparent; font-size: 25px; color: $text; }
+.city-si  { font-size: 50px; color: $text-muted; }
+.city-inp { flex: 1; border: none; background: transparent; font-size: 35px; color: $text; }
 .city-clr { font-size: 14px; color: $text-muted; padding: 0 4px; }
 
 .city-body {
@@ -730,13 +738,13 @@ $tab-h:       56px;
 }
 
 .city-list { flex: 1; overflow-y: auto; height: 100%; padding-bottom: 60px;}
-.city-empty { display: block; text-align: center; color: $text-sub; padding: 40px 0; font-size: 25px; }
+.city-empty { display: block; text-align: center; color: $text-sub; padding: 40px 0; font-size: 35px; }
 
 .city-sec-hd {
   padding: 10px 18px 5px;
   background: #f7faff;
   border-top: 1px solid #eef3ff;
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 800;
   color: $blue;
   letter-spacing: 1px;
@@ -746,14 +754,13 @@ $tab-h:       56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 15px 18px;
+  padding: 18px 18px;
   border-bottom: 1px solid #f4f7ff;
 
   &:active { background: $blue-bg; }
 }
 
-.city-row-name { font-size: 20px; color: $text; font-weight: 500; }
-.city-row-arr  { font-size: 30px; color: #ccd8ef; }
+.city-row-name { font-size: 30px; color: $text; font-weight: 500; }
 
 .city-idx {
   display: flex;
@@ -765,10 +772,10 @@ $tab-h:       56px;
 }
 
 .city-idx-item {
-  font-size: 20px;
+  font-size: 30px;
   color: $blue;
   font-weight: 500;
-  padding: 3px 10px;
+  padding: 5px 10px;
   line-height: 1.5;
 }
 

@@ -86,4 +86,45 @@ router.get('/:hotelId/tags', async (req, res) => {
         res.status(500).json({ code: 500, message: error.message });
     }
 });
+
+// 获取酒店房间标签
+router.get('/:hotelId/room-types/tags', async (req, res) => {
+    try {
+        const { hotelId } = req.params;
+        const db = require('../utils/db');
+        const [rows] = await db.execute(
+            `SELECT tr.target_id as room_type_id, t.* 
+            FROM tags t
+            JOIN tag_relations tr ON t.tag_id = tr.tag_id
+            WHERE tr.target_type = 'room_type' AND tr.target_id IN (
+                SELECT room_type_id FROM room_types WHERE hotel_id = ?
+            )
+            ORDER BY tr.target_id, t.sort_order`,
+            [hotelId]
+        );
+        
+        // 按 room_type_id 分组
+        const groupedTags = {};
+        rows.forEach(row => {
+            const roomTypeId = row.room_type_id;
+            if (!groupedTags[roomTypeId]) {
+                groupedTags[roomTypeId] = [];
+            }
+            groupedTags[roomTypeId].push({
+                id: row.tag_id,
+                name: row.name,
+                tag_type: row.tag_type,
+                sort_order: row.sort_order
+            });
+        });
+        
+        res.json({
+            code: 200,
+            data: groupedTags,
+            message: 'success'
+        });
+    } catch (error) {
+        res.status(500).json({ code: 500, message: error.message });
+    }
+});
 module.exports = router;

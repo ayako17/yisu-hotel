@@ -26,6 +26,7 @@ $radius-lg: 22px;
   padding: 12px 16px 0;
   border-bottom: 1px solid #eef2fa;
   flex-shrink: 0;
+  height: 100px;
 }
 
 .tab-item {
@@ -37,14 +38,14 @@ $radius-lg: 22px;
     content: '';
     position: absolute;
     bottom: 0; left: 20%; right: 20%;
-    height: 2.5px;
+    height: 3px;
     background: $blue;
     border-radius: 2px;
   }
 }
 
 .tab-txt {
-  font-size: 15px;
+  font-size: 35px;
   color: $text-sub;
   font-weight: 500;
   .tab-active & { color: $blue; font-weight: 700 }
@@ -72,18 +73,18 @@ $radius-lg: 22px;
 
 .order-hotel-info { flex: 1; min-width: 0 }
 .order-hotel-name {
-  font-size: 16px; font-weight: 600; color: $text;
+  font-size: 35px; font-weight: 600; color: $text;
   margin-bottom: 4px; display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.order-no { font-size: 12px; color: $text-muted }
+.order-no { font-size: 30px; color: $text-muted }
 
 .order-status {
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: 4px 20px 6px;
   border-radius: 6px;
   margin-left: 8px;
-  .order-status-txt { font-size: 12px; font-weight: 600 }
+  .order-status-txt { font-size: 30px; font-weight: 600 }
 }
 
 // ─── 订单内容 ─────────────────────────────────────────────────────────────────
@@ -98,15 +99,15 @@ $radius-lg: 22px;
   flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0;
 }
 
-.order-room-name   { font-size: 15px; font-weight: 600; color: $text }
-.order-room-detail { font-size: 13px; color: $text-sub }
-.order-date        { font-size: 13px; color: $text-sub }
+.order-room-name   { font-size: 30px; font-weight: 600; color: $text }
+.order-room-detail { font-size: 25px; color: $text-sub }
+.order-date        { font-size: 25px; color: $text-sub }
 
 .order-price-row {
   display: flex; justify-content: space-between; align-items: center; margin-top: 2px;
 }
-.order-price-label { font-size: 13px; color: $text-muted }
-.order-price-value { font-size: 18px; font-weight: 700; color: #e03030 }
+.order-price-label { font-size: 30px; color: $text-muted }
+.order-price-value { font-size: 40px; font-weight: 700; color: #e03030 }
 
 // ─── 操作按钮 ─────────────────────────────────────────────────────────────────
 .order-actions { display: flex; gap: 10px; padding: 0 16px 16px }
@@ -124,7 +125,7 @@ $radius-lg: 22px;
 }
 
 .action-txt {
-  font-size: 14px; color: $blue; font-weight: 600;
+  font-size: 25px; color: $blue; font-weight: 600;
   &.action-txt-primary { color: #fff }
 }
 
@@ -134,14 +135,14 @@ $radius-lg: 22px;
   align-items: center; padding: 80px 40px; gap: 12px;
 }
 .empty-ic   { font-size: 60px; color: $text-muted }
-.empty-title { font-size: 18px; font-weight: 600; color: $text }
-.empty-sub  { font-size: 14px; color: $text-sub }
+.empty-title { font-size: 35px; font-weight: 600; color: $text }
+.empty-sub  { font-size: 35px; color: $text-sub }
 .empty-btn  {
   margin-top: 16px; padding: 12px 40px;
   background: $blue; border-radius: $radius-md;
   &:active { opacity: 0.88 }
 }
-.empty-btn-txt { font-size: 16px; color: #fff; font-weight: 600 }
+.empty-btn-txt { font-size: 35px; color: #fff; font-weight: 600 }
 
 // ─── 骨架屏 ───────────────────────────────────────────────────────────────────
 .skeleton-list { padding: 4px }

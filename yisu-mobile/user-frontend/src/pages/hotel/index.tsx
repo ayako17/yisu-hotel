@@ -230,7 +230,7 @@ const GuestSheet: React.FC<GuestSheetProps> = ({ visible, rooms, adults, childre
   if (!visible) return null
   return (
     <View className='bs-mask' onClick={onClose}>
-      <View className='bs-sheet' style={{ height: '20vh' }} onClick={e => e.stopPropagation()}>
+      <View className='bs-sheet' style={{ height: '28vh' }} onClick={e => e.stopPropagation()}>
         <View className='bs-handle' />
         <Text className='bs-title'>入住信息</Text>
         <View className='guest-list'>
@@ -312,16 +312,25 @@ const HotelDetail: React.FC = () => {
   const fetchHotelData = async () => {
     setLoading(true)
     try {
-      const [hotelRes, imagesRes, roomsRes, tagsRes] = await Promise.all([
+      const [hotelRes, imagesRes, roomsRes, tagsRes, roomTagsRes] = await Promise.all([
         request<any>(`/hotels/${hotelId}`,            { method: 'GET' }),
         request<any>(`/hotels/${hotelId}/media`,      { method: 'GET' }),
         request<any>(`/hotels/${hotelId}/room-types`, { method: 'GET' }),
         request<any>(`/hotels/${hotelId}/tags`,       { method: 'GET' }),
+        request<any>(`/hotels/${hotelId}/room-types/tags`,    { method: 'GET' })
       ])
       setHotel(hotelRes.data || hotelRes)
       setImages(Array.isArray(imagesRes) ? imagesRes : imagesRes.data || [])
+      const tagsData = Array.isArray(tagsRes) ? tagsRes : tagsRes?.data || []
+    setHotelTags(tagsData)
       const rawRooms = Array.isArray(roomsRes) ? roomsRes : roomsRes.data || []
-      setRoomTypes(rawRooms)
+      const roomTagsMap = (roomTagsRes?.data || {}) as Record<number, Tag[]>
+      const roomsWithTags = rawRooms.map((room: RoomType) => ({
+      ...room,
+      tags: roomTagsMap[room.room_type_id] || []
+    }))
+    
+    setRoomTypes(roomsWithTags)
     } catch (error) {
       console.error('获取酒店数据失败', error)
       Taro.showToast({ title: '加载失败', icon: 'none' })
@@ -486,7 +495,7 @@ const HotelDetail: React.FC = () => {
           )}
           <View className='filter-row' style={{ marginTop: '12px' }}>
             <View className='fchip' onClick={handleCall}>
-              <Text className='fchip-txt'>📞 {hotel.phone}</Text>
+              <Text className='tel-txt'>📞 {hotel.phone}</Text>
             </View>
           </View>
           <Text className='address'>{hotel.address}</Text>
@@ -501,7 +510,6 @@ const HotelDetail: React.FC = () => {
                 <View className='date-mid'><Text className='date-nights'>{nights}晚</Text></View>
                 <Text className='fchip-txt'>{fmtShort(checkOut)}</Text>
               </View>
-              <Text className='fchip-arr'>▾</Text>
             </View>
           </View>
           <View className='filter-row' style={{ marginTop: '10px' }}>
@@ -509,7 +517,6 @@ const HotelDetail: React.FC = () => {
               <View className='guest-display'>
                 <Text className='fchip-txt'>{rooms}间 · {adults}成人 · {childrenCount}儿童</Text>
               </View>
-              <Text className='fchip-arr'>▾</Text>
             </View>
           </View>
         </View>
@@ -521,7 +528,8 @@ const HotelDetail: React.FC = () => {
               {[...FACILITY_TAGS, ...SPECIAL_TAGS].map(tag => (
                 <View key={tag.id}
                   className={`tag-chip${selectedTags.includes(tag.id)?' tag-on':''}`}
-                  onClick={() => toggleTag(tag.id)}>
+                  onClick={() => toggleTag(tag.id)}
+                >
                   <Text className='tag-txt'>{tag.name}</Text>
                 </View>
               ))}
@@ -531,7 +539,6 @@ const HotelDetail: React.FC = () => {
 
         {/* 房型列表 */}
         <View className='room-list'>
-          <Text className='section-title'>房型选择</Text>
           {filteredRooms.length > 0
             ? filteredRooms.map(room => {
                 const avail = getAvailableRooms(room)
@@ -549,7 +556,7 @@ const HotelDetail: React.FC = () => {
                       )}
                     </View>
                     <View className='hotel-body'>
-                      <Text className='hotel-name'>{room.name}</Text>
+                      <Text className='room-name'>{room.name}</Text>
                       <Text className='hotel-addr'>{room.bed_info} · 最多{room.max_guests}人</Text>
                       {room.description && <Text className='hotel-addr' numberOfLines={2}>{room.description}</Text>}
                       {room.tags && room.tags.length > 0 && (
@@ -617,7 +624,7 @@ const HotelDetail: React.FC = () => {
       {/* 房型详情弹窗 */}
       {showRoomDetail && selectedRoom && (
         <View className='bs-mask' onClick={() => setShowRoomDetail(false)}>
-          <View className='bs-sheet' style={{ height: '70vh' }} onClick={e => e.stopPropagation()}>
+          <View className='bs-sheet' style={{ height: '52vh' }} onClick={e => e.stopPropagation()}>
             <View className='bs-handle' />
             <Text className='bs-title'>{selectedRoom.name}</Text>
             <ScrollView className='filter-scroll' scrollY>
@@ -670,7 +677,7 @@ const HotelDetail: React.FC = () => {
       {/* 预订弹窗 */}
       {showBooking && selectedRoom && (
         <View className='bs-mask' onClick={() => setShowBooking(false)}>
-          <View className='bs-sheet' style={{ height: '52vh' }} onClick={e => e.stopPropagation()}>
+          <View className='bs-sheet' style={{ height: '35vh' }} onClick={e => e.stopPropagation()}>
             <View className='bs-handle' />
             <Text className='bs-title'>预订 {selectedRoom.name}</Text>
             <View className='booking-info'>

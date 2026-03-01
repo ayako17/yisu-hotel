@@ -831,9 +831,6 @@ const formatDistance = (dist: number | null): string => {
           />
           {keyword ? <Text className='list-search-clr' onClick={()=>{setKeyword('');fetchHotels(1,true)}}>✕</Text> : null}
         </View>
-        <View className='list-search-btn' onClick={handleSearch}>
-          <Text className='list-search-btn-txt'>搜索</Text>
-        </View>
       </View>
 
       {/* 筛选栏（距离 · 价格 · 星级 · 标签） */}
@@ -996,7 +993,7 @@ const formatDistance = (dist: number | null): string => {
       />
 
       {/* 星级弹层 */}
-      <BottomSheet visible={showStarFilter} onClose={confirmStarFilter} height='15vh'>
+      <BottomSheet visible={showStarFilter} onClose={confirmStarFilter} height='20vh'>
         <Text className='bs-title'>星级筛选</Text>
         <View className='star-grid-sheet'>
           {STAR_OPTIONS.map(opt => (
@@ -1020,7 +1017,7 @@ const formatDistance = (dist: number | null): string => {
       </BottomSheet>
 
       {/* 标签弹层 */}
-      <BottomSheet visible={showTagModal} onClose={() => setShowTagModal(false)} height='35vh'>
+      <BottomSheet visible={showTagModal} onClose={() => setShowTagModal(false)} height='40vh'>
         <Text className='bs-title'>筛选标签</Text>
         <ScrollView className='filter-scroll' scrollY>
           {([['特色',SPECIAL_TAGS],['设施',FACILITY_TAGS]] as [string,Tag[]][]).map(([lbl,list]) => (
