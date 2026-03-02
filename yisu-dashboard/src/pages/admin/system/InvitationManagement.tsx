@@ -1,3 +1,4 @@
+//D:\yisu-hotel\yisu-dashboard\src\pages\admin\system
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Modal, Form, Input, InputNumber, DatePicker, Tag, Space, message, Tooltip, Popconfirm } from 'antd';
 import { PlusOutlined, CopyOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
@@ -28,26 +29,34 @@ const InvitationManagement: React.FC = () => {
   const [form] = Form.useForm();
 
   // 加载邀请码列表
-  const fetchInvitations = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:3000/api/invitations', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+const fetchInvitations = async () => {
+  setLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.get('http://localhost:3000/api/invitations', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
 
-      if (res.data.code === 200) {
-        setInvitations(res.data.data.list || []);
-      } else {
-        message.error(res.data.msg || '加载失败');
-      }
-    } catch (error: any) {
-      message.error(error.response?.data?.msg || '加载失败');
-    } finally {
-      setLoading(false);
+    if (res.data.code === 200) {
+      // 确保数据类型正确
+      const formattedList = (res.data.data.list || []).map((item: any) => ({
+        ...item,
+        is_used: Number(item.is_used), // 确保是数字类型
+      }));
+      
+      setInvitations(formattedList);
+      
+      // 调试输出
+      console.log('格式化后的数据:', formattedList);
+    } else {
+      message.error(res.data.msg || '加载失败');
     }
-  };
-
+  } catch (error: any) {
+    message.error(error.response?.data?.msg || '加载失败');
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => {
     fetchInvitations();
   }, []);
@@ -196,134 +205,168 @@ const handleGenerate = async (values: any) => {
     });
   };
 
-  // 删除邀请码
-  const handleDelete = async (id: number) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.delete(`http://localhost:3000/api/invitations/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+// 删除邀请码
+const handleDelete = async (id: number) => {
+  try {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    console.log('删除请求:', {
+      id,
+      token: token ? '存在' : '不存在',
+      user: userStr ? JSON.parse(userStr) : '无'
+    });
 
-      if (res.data.code === 200) {
-        message.success('删除成功');
-        fetchInvitations();
-      } else {
-        message.error(res.data.msg || '删除失败');
-      }
-    } catch (error: any) {
-      message.error(error.response?.data?.msg || '删除失败');
+    const res = await axios.delete(`/invitations/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    console.log('删除响应:', res.data);
+    
+    if (res.data.code === 200) {
+      message.success('删除成功');
+      fetchInvitations();
+    } else {
+      message.error(res.data.msg || '删除失败');
     }
-  };
+  } catch (error: any) {
+    console.error('删除失败详情:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    message.error(error.response?.data?.msg || '删除失败');
+  }
+};
 
-  const columns = [
-    {
-      title: '邀请码',
-      dataIndex: 'invite_code',
-      key: 'invite_code',
-      render: (text: string, record: Invitation) => (
-        <Space>
-          <span style={{ 
-            fontFamily: 'monospace',
-            backgroundColor: '#f5f5f5',
-            padding: '2px 8px',
-            borderRadius: '4px'
-          }}>
-            {text}
-          </span>
-          {record.is_used === 0 && (
-            <Tooltip title="复制">
-              <Button
-                type="text"
-                icon={<CopyOutlined />}
-                size="small"
-                onClick={() => copyToClipboard(text)}
-              />
-            </Tooltip>
+const columns = [
+  {
+    title: '邀请码',
+    dataIndex: 'invite_code',
+    key: 'invite_code',
+    render: (text: string, record: Invitation) => (
+      <Space>
+        <span style={{ 
+          fontFamily: 'monospace',
+          backgroundColor: '#f5f5f5',
+          padding: '2px 8px',
+          borderRadius: '4px'
+        }}>
+          {text}
+        </span>
+        {record.is_used === 0 && (
+          <Tooltip title="复制">
+            <Button
+              type="text"
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={() => copyToClipboard(text)}
+            />
+          </Tooltip>
+        )}
+      </Space>
+    ),
+  },
+  {
+    title: '状态',
+    dataIndex: 'status_text',
+    key: 'status',
+    render: (text: string, record: Invitation) => {
+      let color = 'default';
+      if (record.is_used === 1) {
+        color = 'green';
+      } else if (new Date(record.expire_at) < new Date()) {
+        color = 'red';
+      } else {
+        color = 'blue';
+      }
+      return <Tag color={color}>{text}</Tag>;
+    },
+  },
+  {
+    title: '有效期至',
+    dataIndex: 'expire_at',
+    key: 'expire_at',
+    render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
+  },
+  {
+    title: '创建者',
+    dataIndex: 'creator_name',
+    key: 'creator_name',
+  },
+  {
+    title: '使用人',
+    dataIndex: 'used_by_name',
+    key: 'used_by_name',
+    render: (text: string | null) => text || '-',
+  },
+  {
+    title: '备注',
+    dataIndex: 'note',
+    key: 'note',
+    render: (text: string) => text || '-',
+  },
+  {
+    title: '创建时间',
+    dataIndex: 'created_at',
+    key: 'created_at',
+    render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
+  },
+  {
+    title: '操作',
+    key: 'action',
+    width: 120,
+    fixed: 'right' as const,
+    render: (_: any, record: Invitation) => {
+      const isUnused = Number(record.is_used) === 0;
+      const isNotExpired = !dayjs(record.expire_at).isBefore(dayjs());
+      
+      // 添加调试信息
+      console.log('渲染操作列:', {
+        code: record.invite_code,
+        isUnused,
+        isNotExpired,
+        showButtons: isUnused && isNotExpired
+      });
+      
+      return (
+        <Space size="middle">
+          {isUnused && isNotExpired && (
+            <Button
+              type="primary"
+              shape="circle"
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                copyToClipboard(record.invite_code);
+              }}
+              style={{ marginRight: 8 }}
+            />
           )}
-        </Space>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status_text',
-      key: 'status',
-      render: (text: string, record: Invitation) => {
-        let color = 'default';
-        if (record.is_used === 1) {
-          color = 'green';
-        } else if (new Date(record.expire_at) < new Date()) {
-          color = 'red';
-        } else {
-          color = 'blue';
-        }
-        return <Tag color={color}>{text}</Tag>;
-      },
-    },
-    {
-      title: '有效期至',
-      dataIndex: 'expire_at',
-      key: 'expire_at',
-      render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
-    },
-    {
-      title: '创建者',
-      dataIndex: 'creator_name',
-      key: 'creator_name',
-    },
-    {
-      title: '使用人',
-      dataIndex: 'used_by_name',
-      key: 'used_by_name',
-      render: (text: string | null) => text || '-',
-    },
-    {
-      title: '备注',
-      dataIndex: 'note',
-      key: 'note',
-      render: (text: string) => text || '-',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: Invitation) => (
-        <Space>
-          {record.is_used === 0 && new Date(record.expire_at) >= new Date() && (
-            <Tooltip title="复制邀请码">
-              <Button
-                type="text"
-                icon={<CopyOutlined />}
-                size="small"
-                onClick={() => copyToClipboard(record.invite_code)}
-              />
-            </Tooltip>
-          )}
-          {record.is_used === 0 && (
+          {isUnused && (
             <Popconfirm
               title="确定要删除这个邀请码吗？"
               onConfirm={() => handleDelete(record.invitation_id)}
               okText="确定"
               cancelText="取消"
             >
-              <Tooltip title="删除">
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  size="small"
-                />
-              </Tooltip>
+              <Button
+                type="primary"
+                danger
+                shape="circle"
+                icon={<DeleteOutlined />}
+                size="small"
+              />
             </Popconfirm>
           )}
+          {/* 调试：如果没有按钮，显示一个提示 */}
+          {!isUnused && <span style={{ color: '#999' }}>-</span>}
         </Space>
-      ),
+      );
     },
-  ];
+  },
+];
 
   return (
     <div>
@@ -349,17 +392,19 @@ const handleGenerate = async (values: any) => {
         }
         bordered={false}
       >
-        <Table
-          columns={columns}
-          dataSource={invitations}
-          loading={loading}
-          rowKey="invitation_id"
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条`
-          }}
-        />
+      <Table
+        columns={columns}
+        dataSource={invitations}
+        loading={loading}
+        rowKey="invitation_id"
+        scroll={{ x: 1300 }} // 强制横向滚动
+        bordered // 添加边框方便查看
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showTotal: (total) => `共 ${total} 条`
+        }}
+      />
       </Card>
 
       {/* 生成邀请码模态框 */}
